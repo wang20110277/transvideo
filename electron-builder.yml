@@ -1,0 +1,55 @@
+appId: com.manju2026.trans-video
+productName: TRANSVIDEO
+directories:
+  buildResources: build
+  output: release/build
+files:
+  - out/**/*
+  - package.json
+  # Desktop-only packaging guard: exclude web/image-toolchain heavy deps
+  - "!node_modules/next/**"
+  - "!node_modules/@next/**"
+  - "!node_modules/sharp/**"
+  - "!node_modules/@img/**"
+
+extraResources:
+  - from: demo-data
+    to: demo-data
+    filter:
+      - "**/*"
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+
+# 图标配置
+icon: build/icon.ico
+
+mac:
+  icon: build/icon.icns
+  artifactName: ${name}-${version}-${arch}-mac.${ext}
+  target:
+    - dmg
+    - zip
+
+win:
+  executableName: trans-video
+  icon: build/icon.ico
+  forceCodeSigning: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+# NSIS 安装包配置
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: TRANSVIDEO
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
