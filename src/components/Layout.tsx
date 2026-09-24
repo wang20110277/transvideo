@@ -51,14 +51,17 @@ export function Layout() {
         <TabBar />
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           <ProjectHeader />
-          {activeTab === "export" && <ExportView />}
-          {activeTab === "settings" && <SettingsPanel />}
-          {activeTab === "overview" && <OverviewPanel />}
-          {activeTab === "script" && <ScriptView />}
-          {activeTab === "characters" && <CharactersView />}
-          {activeTab === "scenes" && <ScenesView />}
-          {activeTab === "freedom" && <FreedomView />}
-          {activeTab === "assets" && <AssetsView />}
+          {/* 面板占 ProjectHeader 之外的剩余空间；面板自身用 h-full 时不再溢出被裁 */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            {activeTab === "export" && <ExportView />}
+            {activeTab === "settings" && <SettingsPanel />}
+            {activeTab === "overview" && <OverviewPanel />}
+            {activeTab === "script" && <ScriptView />}
+            {activeTab === "characters" && <CharactersView />}
+            {activeTab === "scenes" && <ScenesView />}
+            {activeTab === "freedom" && <FreedomView />}
+            {activeTab === "assets" && <AssetsView />}
+          </div>
         </div>
       </div>
     );

@@ -419,7 +419,7 @@ export function ScriptInput({
         </TabsContent>
 
         {/* 创作模式 */}
-        <TabsContent value="create" className="flex-1 mt-3">
+        <TabsContent value="create" className="flex-1 mt-3 overflow-y-auto">
           <div className="space-y-3">
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">
@@ -492,7 +492,7 @@ export function ScriptInput({
       </Tabs>
 
       {/* 设置区域 - 根据模式显示不同选项 */}
-      <div className="space-y-3 pt-2 border-t">
+      <div className="space-y-3 pt-2 border-t min-h-0 overflow-y-auto">
         {/* 导入模式：显示语言、场景数量、分镜数量 */}
         {mode === "import" && (
           <div className="space-y-3">

@@ -14,8 +14,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Path aliases */
-    "baseUrl": ".",
+    /* Path aliases（paths 相对 tsconfig 所在目录解析，无需已弃用的 baseUrl） */
     "paths": {
       "@/*": ["./src/*"],
       "@opencut/ai-core": ["./src/packages/ai-core/index.ts"],

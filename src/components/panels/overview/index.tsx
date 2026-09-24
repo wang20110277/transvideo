@@ -252,40 +252,42 @@ export function OverviewPanel() {
 
   if (!meta) {
     return (
-      <div className="h-full p-6">
-        <div className="mx-auto w-full max-w-6xl rounded-xl border bg-panel">
-          <div className="border-b px-5 py-4">
-            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-              <BookOpen className="h-3.5 w-3.5" />
-              新手引导
-            </div>
-            <h3 className="mt-2 text-lg font-semibold text-foreground">单机版爱阅真人剧基础工作流</h3>
-            <p className="mt-1 text-sm text-muted-foreground">按顺序执行，不要跳步。</p>
-          </div>
-          <div className="grid gap-4 p-4 md:grid-cols-2">
-            {OVERVIEW_WORKFLOW_SECTIONS.map((section) => (
-              <div key={section.id} className="rounded-lg border bg-background/50 p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                    {section.id}
-                  </span>
-                  <h4 className="text-sm font-semibold text-foreground">{section.title}</h4>
-                </div>
-                <div className="space-y-2">
-                  {section.steps.map((step, idx) => (
-                    <div key={`${section.id}-${idx}`} className="flex items-start gap-2">
-                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] text-muted-foreground">
-                        {idx + 1}
-                      </span>
-                      <p className="text-sm leading-5 text-foreground">{step}</p>
-                    </div>
-                  ))}
-                </div>
+      <ScrollArea className="h-full">
+        <div className="p-6">
+          <div className="mx-auto w-full max-w-6xl rounded-xl border bg-panel">
+            <div className="border-b px-5 py-4">
+              <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                <BookOpen className="h-3.5 w-3.5" />
+                新手引导
               </div>
-            ))}
+              <h3 className="mt-2 text-lg font-semibold text-foreground">单机版爱阅真人剧基础工作流</h3>
+              <p className="mt-1 text-sm text-muted-foreground">按顺序执行，不要跳步。</p>
+            </div>
+            <div className="grid gap-4 p-4 md:grid-cols-2">
+              {OVERVIEW_WORKFLOW_SECTIONS.map((section) => (
+                <div key={section.id} className="rounded-lg border bg-background/50 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                      {section.id}
+                    </span>
+                    <h4 className="text-sm font-semibold text-foreground">{section.title}</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {section.steps.map((step, idx) => (
+                      <div key={`${section.id}-${idx}`} className="flex items-start gap-2">
+                        <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] text-muted-foreground">
+                          {idx + 1}
+                        </span>
+                        <p className="text-sm leading-5 text-foreground">{step}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      </ScrollArea>
     );
   }
 

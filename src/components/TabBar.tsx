@@ -108,7 +108,7 @@ export function TabBar() {
   return (
     <div className="flex flex-col w-14 bg-panel border-r border-border">
       {/* Logo + Back */}
-      <div className="p-2 border-b border-border">
+      <div className="p-2 border-b border-border shrink-0">
         <img src="./logo.png" alt="TRANSVIDEO Logo" className="w-8 h-8 mx-auto mb-1" />
         <TooltipProvider delayDuration={300}>
           <Tooltip>
@@ -126,7 +126,7 @@ export function TabBar() {
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 py-1">
+      <nav className="flex-1 py-1 min-h-0 overflow-y-auto scrollbar-thin">
         {mainNavItems.map((item) => {
           const isActive = activeTab === item.id;
           const Icon = item.icon;
@@ -158,7 +158,7 @@ export function TabBar() {
       </nav>
 
       {/* Bottom: Help + Settings + Theme */}
-      <div className="mt-auto border-t border-border py-1">
+      <div className="mt-auto border-t border-border py-1 shrink-0">
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
