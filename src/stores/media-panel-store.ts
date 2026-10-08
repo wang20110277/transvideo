@@ -13,13 +13,14 @@ import {
   PaletteIcon,
   LayoutDashboardIcon,
   FolderOpenIcon,
+  ScissorsIcon,
   LucideIcon,
 } from "lucide-react";
 import { create } from "zustand";
 import type { CharacterIdentityAnchors, CharacterNegativePrompt } from "@/types/script";
 
 // Tab-based navigation (simpler flat structure)
-export type Tab = "dashboard" | "overview" | "script" | "characters" | "scenes" | "freedom" | "director" | "sclass" | "assets" | "media" | "export" | "settings";
+export type Tab = "dashboard" | "overview" | "script" | "characters" | "scenes" | "freedom" | "director" | "sclass" | "assets" | "media" | "editor" | "export" | "settings";
 
 export interface NavItem {
   id: Tab;
@@ -38,6 +39,7 @@ export const mainNavItems: NavItem[] = [
   { id: "sclass", label: "S级", icon: SparklesIcon, phase: "03" },
   { id: "assets", label: "资产", icon: FolderOpenIcon },
   { id: "media", label: "素材", icon: VideoIcon },
+  { id: "editor", label: "剪辑", icon: ScissorsIcon },
   { id: "export", label: "导出", icon: FilmIcon, phase: "04" },
   { id: "freedom", label: "自由", icon: PaletteIcon, phase: "02" },
 ];
@@ -74,6 +76,7 @@ export const tabs: { [key in Tab]: { icon: LucideIcon; label: string; stage?: St
   sclass: { icon: SparklesIcon, label: "S级", stage: "director" },
   assets: { icon: FolderOpenIcon, label: "资产" },
   media: { icon: VideoIcon, label: "素材" },
+  editor: { icon: ScissorsIcon, label: "剪辑" },
   export: { icon: FilmIcon, label: "导出", stage: "export" },
   settings: { icon: SettingsIcon, label: "设置" },
 };

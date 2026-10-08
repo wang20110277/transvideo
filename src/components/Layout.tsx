@@ -22,6 +22,7 @@ import { CharactersView } from "@/components/panels/characters";
 import { ScenesView } from "@/components/panels/scenes";
 import { FreedomView } from "@/components/panels/freedom";
 import { MediaView } from "@/components/panels/media";
+import { EditorView } from "@/components/panels/editor/EditorView";
 import { SettingsPanel } from "@/components/panels/SettingsPanel";
 import { ExportView } from "@/components/panels/export";
 import { OverviewPanel } from "@/components/panels/overview";
@@ -44,7 +45,7 @@ export function Layout() {
 
   // Full-screen views (no resizable panels)
   // 这些板块有自己的多栏布局，不需要全局的预览和属性面板
-  const fullScreenTabs = ["export", "settings", "overview", "script", "characters", "scenes", "freedom", "assets"];
+  const fullScreenTabs = ["export", "settings", "overview", "script", "characters", "scenes", "freedom", "assets", "editor"];
   if (fullScreenTabs.includes(activeTab)) {
     return (
       <div className="h-full flex bg-background">
@@ -61,6 +62,7 @@ export function Layout() {
             {activeTab === "scenes" && <ScenesView />}
             {activeTab === "freedom" && <FreedomView />}
             {activeTab === "assets" && <AssetsView />}
+            {activeTab === "editor" && <EditorView />}
           </div>
         </div>
       </div>
