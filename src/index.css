@@ -95,15 +95,14 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
-  /* ===== OpenCut 编辑器补充: 字体 / 断点 / 字号 ===== */
+  /* ===== OpenCut 编辑器补充: 字体 / 断点 =====
+     注: OpenCut 紧凑字号（--text-xs/sm/base）不进全局 @theme —— 会把宿主 1266 处
+     text 工具类字号一并缩小；改为下方 .opencut-scope 作用域类提供（Task 7 挂到编辑器根元素），
+     宿主 @theme 非 inline，text 工具类编译为 font-size: var(--text-*)，变量级联在
+     scope 内取 OpenCut 值、宿主其余部分回落 Tailwind 默认值。 */
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", monospace;
   --breakpoint-xs: 30rem;
-  --text-xs: 0.72rem;
-  --text-sm: 0.79rem;
-  --text-base: 0.92rem;
-  --text-base--line-height: calc(1.5 / 0.95);
-  --text-xs--line-height: calc(1 / 0.8);
 
   /* ===== OpenCut 编辑器补充: 手风琴动画（配合 tailwindcss-animate） ===== */
   --animate-accordion-down: accordion-down 0.2s ease-out;
@@ -391,6 +390,17 @@
 }
 
 /* ==================== OpenCut 编辑器补充: 自定义段（源自 OpenCut globals.css） ==================== */
+
+/* OpenCut 编辑器字号作用域: 编辑器内使用 OpenCut 紧凑字号，宿主保持 Tailwind 默认。
+   Task 7 会把 .opencut-scope 挂到编辑器根元素; text 工具类编译为 font-size: var(--text-*)，
+   CSS 变量级联使 scope 内取 OpenCut 值。--text-sm 无 line-height 覆盖（OpenCut 原样，沿用默认）。 */
+.opencut-scope {
+  --text-xs: 0.72rem;
+  --text-xs--line-height: calc(1 / 0.8);
+  --text-sm: 0.79rem;
+  --text-base: 0.92rem;
+  --text-base--line-height: calc(1.5 / 0.95);
+}
 
 /* 文本选中样式（OpenCut @layer base 中宿主缺失的段；等价展开 @apply bg-primary/35 selection:text-primary-foreground） */
 @layer base {
