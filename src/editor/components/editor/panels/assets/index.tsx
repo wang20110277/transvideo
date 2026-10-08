@@ -21,20 +21,14 @@ export function AssetsPanel() {
 		stickers: <StickersView />,
 		effects: <EffectsView />,
 		transitions: (
-			<div className="text-muted-foreground p-4">
-				Transitions view coming soon...
-			</div>
+			<div className="text-muted-foreground p-4">转场功能即将上线…</div>
 		),
 		captions: <Captions />,
 		filters: (
-			<div className="text-muted-foreground p-4">
-				Filters view coming soon...
-			</div>
+			<div className="text-muted-foreground p-4">滤镜功能即将上线…</div>
 		),
 		adjustment: (
-			<div className="text-muted-foreground p-4">
-				Adjustment view coming soon...
-			</div>
+			<div className="text-muted-foreground p-4">调整功能即将上线…</div>
 		),
 		settings: <SettingsView />,
 	};

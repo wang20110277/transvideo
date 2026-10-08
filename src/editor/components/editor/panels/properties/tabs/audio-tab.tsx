@@ -84,17 +84,17 @@ export function AudioTab({
 	return (
 		<Section collapsible sectionKey={`${element.id}:audio`}>
 			<SectionHeader>
-				<SectionTitle>Audio</SectionTitle>
+				<SectionTitle>音频</SectionTitle>
 			</SectionHeader>
 			<SectionContent>
 				<SectionFields>
 					<SectionField
-						label="Volume"
+						label="音量"
 						beforeLabel={
 							<KeyframeToggle
 								isActive={volume.isKeyframedAtTime}
 								isDisabled={!isPlayheadWithinElementRange}
-								title="Toggle volume keyframe"
+								title="切换音量关键帧"
 								onToggle={volume.toggleKeyframe}
 							/>
 						}

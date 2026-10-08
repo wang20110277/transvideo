@@ -15,20 +15,20 @@ interface StarParams {
 const STAR_PARAMS: ParamDefinition<keyof StarParams & string>[] = [
 	{
 		key: "fill",
-		label: "Fill",
+		label: "填充",
 		type: "color",
 		default: "#ffffff",
 	},
 	{
 		key: "stroke",
-		label: "Color",
+		label: "颜色",
 		type: "color",
 		default: "#000000",
 		group: "stroke",
 	},
 	{
 		key: "strokeWidth",
-		label: "Width",
+		label: "描边宽度",
 		type: "number",
 		default: 0,
 		min: 0,
@@ -40,7 +40,7 @@ const STAR_PARAMS: ParamDefinition<keyof StarParams & string>[] = [
 	STROKE_ALIGN_PARAM,
 	{
 		key: "points",
-		label: "Points",
+		label: "角数",
 		type: "number",
 		default: 5,
 		min: 3,
@@ -50,7 +50,7 @@ const STAR_PARAMS: ParamDefinition<keyof StarParams & string>[] = [
 	},
 	{
 		key: "depth",
-		label: "Depth",
+		label: "深度",
 		type: "number",
 		default: 45,
 		min: 1,
@@ -62,7 +62,7 @@ const STAR_PARAMS: ParamDefinition<keyof StarParams & string>[] = [
 
 export const starGraphicDefinition: GraphicDefinition = {
 	id: "star",
-	name: "Star",
+	name: "星形",
 	keywords: ["star", "sparkle", "burst"],
 	params: STAR_PARAMS,
 	render({ ctx, params, width, height }) {

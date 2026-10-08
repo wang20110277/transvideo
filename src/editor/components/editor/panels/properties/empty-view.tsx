@@ -10,9 +10,9 @@ export function EmptyView() {
 				strokeWidth={1}
 			/>
 			<div className="flex flex-col gap-2 text-center">
-				<p className="text-lg font-medium ">It's empty here</p>
+				<p className="text-lg font-medium ">这里空空如也</p>
 				<p className="text-muted-foreground text-sm text-balance">
-					Click an element on the timeline to edit its properties
+					点击时间线上的元素即可编辑其属性
 				</p>
 			</div>
 		</div>

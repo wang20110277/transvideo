@@ -59,7 +59,7 @@ const BlurPreview = memo(
 				)}
 				onClick={onSelect}
 				type="button"
-				aria-label={`Select ${blur.label} blur`}
+				aria-label={`选择 ${blur.label} 模糊`}
 			>
 				<canvas
 					ref={canvasRef}
@@ -114,7 +114,7 @@ const BackgroundPreviews = memo(
 						}
 						onClick={() => onSelect(bg)}
 						type="button"
-						aria-label={`Select background ${bg}`}
+						aria-label={`选择背景 ${bg}`}
 					/>
 				)),
 			[
@@ -131,7 +131,7 @@ const BackgroundPreviews = memo(
 BackgroundPreviews.displayName = "BackgroundPreviews";
 
 const COLOR_SECTIONS = [
-	{ title: "Colors", backgrounds: colors, useBackgroundColor: true },
+	{ title: "颜色", backgrounds: colors, useBackgroundColor: true },
 	{ title: "Pattern craft", backgrounds: patternCraftGradients },
 	{ title: "Syntax UI", backgrounds: syntaxUIGradients },
 ] as const;
@@ -189,7 +189,7 @@ export function BackgroundContent() {
 		<div className="flex flex-col">
 			<Section collapsible defaultOpen={true} sectionKey="background-blur" showTopBorder={false}>
 				<SectionHeader>
-					<SectionTitle>Blur</SectionTitle>
+					<SectionTitle>模糊</SectionTitle>
 				</SectionHeader>
 				<SectionContent>
 					<div className="flex flex-wrap gap-2">{blurPreviews}</div>

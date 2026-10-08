@@ -23,12 +23,12 @@ export function TextView() {
 	};
 
 	return (
-		<PanelView title="Text">
+		<PanelView title="文字">
 			<DraggableItem
-				name="Default text"
+				name="默认文字"
 				preview={
 					<div className="bg-accent flex size-full items-center justify-center rounded">
-						<span className="text-xs select-none">Default text</span>
+						<span className="text-xs select-none">默认文字</span>
 					</div>
 				}
 				dragData={{

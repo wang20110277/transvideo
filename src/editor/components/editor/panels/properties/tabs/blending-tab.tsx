@@ -42,32 +42,32 @@ type BlendingElement = {
 };
 
 const BLEND_MODE_GROUPS = [
-	[{ value: "normal", label: "Normal" }],
+	[{ value: "normal", label: "正常" }],
 	[
-		{ value: "darken", label: "Darken" },
-		{ value: "multiply", label: "Multiply" },
-		{ value: "color-burn", label: "Color Burn" },
+		{ value: "darken", label: "变暗" },
+		{ value: "multiply", label: "正片叠底" },
+		{ value: "color-burn", label: "颜色加深" },
 	],
 	[
-		{ value: "lighten", label: "Lighten" },
-		{ value: "screen", label: "Screen" },
-		{ value: "plus-lighter", label: "Plus Lighter" },
-		{ value: "color-dodge", label: "Color Dodge" },
+		{ value: "lighten", label: "变亮" },
+		{ value: "screen", label: "滤色" },
+		{ value: "plus-lighter", label: "线性减淡（添加）" },
+		{ value: "color-dodge", label: "颜色减淡" },
 	],
 	[
-		{ value: "overlay", label: "Overlay" },
-		{ value: "soft-light", label: "Soft Light" },
-		{ value: "hard-light", label: "Hard Light" },
+		{ value: "overlay", label: "叠加" },
+		{ value: "soft-light", label: "柔光" },
+		{ value: "hard-light", label: "强光" },
 	],
 	[
-		{ value: "difference", label: "Difference" },
-		{ value: "exclusion", label: "Exclusion" },
+		{ value: "difference", label: "差值" },
+		{ value: "exclusion", label: "排除" },
 	],
 	[
-		{ value: "hue", label: "Hue" },
-		{ value: "saturation", label: "Saturation" },
-		{ value: "color", label: "Color" },
-		{ value: "luminosity", label: "Luminosity" },
+		{ value: "hue", label: "色相" },
+		{ value: "saturation", label: "饱和度" },
+		{ value: "color", label: "颜色" },
+		{ value: "luminosity", label: "明度" },
 	],
 ];
 
@@ -147,18 +147,18 @@ export function BlendingTab({
 	return (
 		<Section collapsible sectionKey={`${element.id}:blending`}>
 			<SectionHeader>
-				<SectionTitle>Blending</SectionTitle>
+				<SectionTitle>混合</SectionTitle>
 			</SectionHeader>
 			<SectionContent>
 				<div className="flex items-start gap-2">
 					<SectionField
-						label="Opacity"
+						label="不透明度"
 						className="w-1/2"
 						beforeLabel={
 							<KeyframeToggle
 								isActive={opacity.isKeyframedAtTime}
 								isDisabled={!isPlayheadWithinElementRange}
-								title="Toggle opacity keyframe"
+								title="切换不透明度关键帧"
 								onToggle={opacity.toggleKeyframe}
 							/>
 						}
@@ -189,7 +189,7 @@ export function BlendingTab({
 							dragSensitivity="slow"
 						/>
 					</SectionField>
-					<SectionField label="Blend mode" className="w-1/2">
+					<SectionField label="混合模式" className="w-1/2">
 						<Select
 							value={committedBlendModeRef.current}
 							onOpenChange={handleBlendModeOpenChange}
@@ -199,7 +199,7 @@ export function BlendingTab({
 								icon={<HugeiconsIcon icon={RainDropIcon} />}
 								className="w-full"
 							>
-								<SelectValue placeholder="Select blend mode" />
+								<SelectValue placeholder="选择混合模式" />
 							</SelectTrigger>
 							<SelectContent className="w-36" onPointerLeave={onPointerLeave}>
 								{BLEND_MODE_GROUPS.map((group, groupIndex) => (

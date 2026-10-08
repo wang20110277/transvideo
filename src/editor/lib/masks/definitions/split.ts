@@ -175,7 +175,7 @@ function computeSplitMaskParamUpdate({
 
 export const splitMaskDefinition: MaskDefinition<SplitMaskParams> = {
 	type: "split",
-	name: "Split",
+	name: "分割",
 	overlayShape: "line",
 	features: {
 		hasPosition: true,
@@ -221,7 +221,7 @@ export const splitMaskDefinition: MaskDefinition<SplitMaskParams> = {
 		},
 		{
 			key: "rotation",
-			label: "Rotation",
+			label: "旋转",
 			type: "number",
 			default: 0,
 			min: 0,

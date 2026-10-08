@@ -9,7 +9,7 @@ import {
 
 export const ellipseMaskDefinition: MaskDefinition<RectangleMaskParams> = {
 	type: "ellipse",
-	name: "Ellipse",
+	name: "椭圆",
 	overlayShape: "box",
 	buildOverlayPath({ width, height }) {
 		const rx = Math.max((width - 1) / 2, 0);

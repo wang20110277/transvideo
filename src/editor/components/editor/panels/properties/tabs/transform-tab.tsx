@@ -262,7 +262,7 @@ export function TransformTab({
 	return (
 		<Section collapsible sectionKey={`${element.id}:transform`}>
 			<SectionHeader>
-				<SectionTitle>Transform</SectionTitle>
+				<SectionTitle>变换</SectionTitle>
 			</SectionHeader>
 			<SectionContent>
 				<SectionFields>
@@ -270,13 +270,13 @@ export function TransformTab({
 						{isScaleLocked ? (
 							<>
 								<SectionField
-									label="Scale"
+									label="缩放"
 									className="min-w-0 flex-1"
 									beforeLabel={
 										<KeyframeToggle
 											isActive={hasScaleKeyframe}
 											isDisabled={!isPlayheadWithinElementRange}
-											title="Toggle scale keyframe"
+											title="切换缩放关键帧"
 											onToggle={toggleScaleKeyframe}
 										/>
 									}
@@ -291,13 +291,13 @@ export function TransformTab({
 						) : (
 							<>
 								<SectionField
-									label="Width"
+									label="宽度"
 									className="min-w-0 flex-1"
 									beforeLabel={
 										<KeyframeToggle
 											isActive={scaleX.isKeyframedAtTime}
 											isDisabled={!isPlayheadWithinElementRange}
-											title="Toggle width scale keyframe"
+											title="切换宽度缩放关键帧"
 											onToggle={scaleX.toggleKeyframe}
 										/>
 									}
@@ -306,13 +306,13 @@ export function TransformTab({
 								</SectionField>
 								{scaleLockButton}
 								<SectionField
-									label="Height"
+									label="高度"
 									className="min-w-0 flex-1"
 									beforeLabel={
 										<KeyframeToggle
 											isActive={scaleY.isKeyframedAtTime}
 											isDisabled={!isPlayheadWithinElementRange}
-											title="Toggle height scale keyframe"
+											title="切换高度缩放关键帧"
 											onToggle={scaleY.toggleKeyframe}
 										/>
 									}
@@ -323,12 +323,12 @@ export function TransformTab({
 						)}
 					</div>
 					<SectionField
-						label="Position"
+						label="位置"
 						beforeLabel={
 							<KeyframeToggle
 								isActive={position.isKeyframedAtTime}
 								isDisabled={!isPlayheadWithinElementRange}
-								title="Toggle position keyframe"
+								title="切换位置关键帧"
 								onToggle={position.toggleKeyframe}
 							/>
 						}
@@ -382,12 +382,12 @@ export function TransformTab({
 					</SectionField>
 
 					<SectionField
-						label="Rotation"
+						label="旋转"
 						beforeLabel={
 							<KeyframeToggle
 								isActive={rotation.isKeyframedAtTime}
 								isDisabled={!isPlayheadWithinElementRange}
-								title="Toggle rotation keyframe"
+								title="切换旋转关键帧"
 								onToggle={rotation.toggleKeyframe}
 							/>
 						}

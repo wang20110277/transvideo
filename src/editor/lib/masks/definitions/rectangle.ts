@@ -46,7 +46,7 @@ function buildRectanglePath({
 
 export const rectangleMaskDefinition: MaskDefinition<RectangleMaskParams> = {
 	type: "rectangle",
-	name: "Rectangle",
+	name: "矩形",
 	overlayShape: "box",
 	features: {
 		hasPosition: true,

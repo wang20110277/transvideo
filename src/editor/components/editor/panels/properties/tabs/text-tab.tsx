@@ -83,11 +83,11 @@ function ContentSection({
 	return (
 		<Section collapsible sectionKey={`${element.id}:content`}>
 			<SectionHeader>
-				<SectionTitle>Content</SectionTitle>
+				<SectionTitle>内容</SectionTitle>
 			</SectionHeader>
 			<SectionContent>
 				<Textarea
-					placeholder="Name"
+					placeholder="名称"
 					value={content.displayValue}
 					className="min-h-20"
 					onFocus={content.onFocus}
@@ -152,11 +152,11 @@ function TypographySection({
 	return (
 		<Section collapsible sectionKey={`${element.id}:typography`}>
 			<SectionHeader>
-				<SectionTitle>Typography</SectionTitle>
+				<SectionTitle>文字排版</SectionTitle>
 			</SectionHeader>
 			<SectionContent>
 				<SectionFields>
-					<SectionField label="Font">
+					<SectionField label="字体">
 						<FontPicker
 							defaultValue={element.fontFamily}
 							onValueChange={(value) =>
@@ -172,7 +172,7 @@ function TypographySection({
 							}
 						/>
 					</SectionField>
-					<SectionField label="Size">
+					<SectionField label="字号">
 						<NumberField
 							value={fontSize.displayValue}
 							min={MIN_FONT_SIZE}
@@ -200,12 +200,12 @@ function TypographySection({
 						/>
 					</SectionField>
 					<SectionField
-						label="Color"
+						label="颜色"
 						beforeLabel={
 							<KeyframeToggle
 								isActive={textColor.isKeyframedAtTime}
 								isDisabled={!isPlayheadWithinElementRange}
-								title="Toggle text color keyframe"
+								title="切换文字颜色关键帧"
 								onToggle={textColor.toggleKeyframe}
 							/>
 						}
@@ -273,11 +273,11 @@ function SpacingSection({
 	return (
 		<Section collapsible sectionKey={`${element.id}:spacing`}>
 			<SectionHeader>
-				<SectionTitle>Spacing</SectionTitle>
+				<SectionTitle>间距</SectionTitle>
 			</SectionHeader>
 			<SectionContent>
 				<div className="flex items-start gap-2">
-					<SectionField label="Letter spacing" className="w-1/2">
+					<SectionField label="字间距" className="w-1/2">
 						<NumberField
 							value={letterSpacing.displayValue}
 							onFocus={letterSpacing.onFocus}
@@ -303,7 +303,7 @@ function SpacingSection({
 							icon={<OcTextWidthIcon size={14} />}
 						/>
 					</SectionField>
-					<SectionField label="Line height" className="w-1/2">
+					<SectionField label="行高" className="w-1/2">
 						<NumberField
 							value={lineHeight.displayValue}
 							onFocus={lineHeight.onFocus}
@@ -547,7 +547,7 @@ function BackgroundSection({
 					</Button>
 				}
 			>
-				<SectionTitle>Background</SectionTitle>
+				<SectionTitle>背景</SectionTitle>
 			</SectionHeader>
 			<SectionContent
 				className={cn(
@@ -556,12 +556,12 @@ function BackgroundSection({
 			>
 				<SectionFields>
 					<SectionField
-						label="Color"
+						label="颜色"
 						beforeLabel={
 							<KeyframeToggle
 								isActive={bgColor.isKeyframedAtTime}
 								isDisabled={!isPlayheadWithinElementRange}
-								title="Toggle background color keyframe"
+								title="切换背景颜色关键帧"
 								onToggle={bgColor.toggleKeyframe}
 							/>
 						}
@@ -585,13 +585,13 @@ function BackgroundSection({
 					</SectionField>
 					<div className="flex items-start gap-2">
 						<SectionField
-							label="Width"
+							label="宽度"
 							className="w-1/2"
 							beforeLabel={
 								<KeyframeToggle
 									isActive={paddingX.isKeyframedAtTime}
 									isDisabled={!isPlayheadWithinElementRange}
-									title="Toggle background width keyframe"
+									title="切换背景宽度关键帧"
 									onToggle={paddingX.toggleKeyframe}
 								/>
 							}
@@ -620,13 +620,13 @@ function BackgroundSection({
 							/>
 						</SectionField>
 						<SectionField
-							label="Height"
+							label="高度"
 							className="w-1/2"
 							beforeLabel={
 								<KeyframeToggle
 									isActive={paddingY.isKeyframedAtTime}
 									isDisabled={!isPlayheadWithinElementRange}
-									title="Toggle background height keyframe"
+									title="切换背景高度关键帧"
 									onToggle={paddingY.toggleKeyframe}
 								/>
 							}
@@ -657,13 +657,13 @@ function BackgroundSection({
 					</div>
 					<div className="flex items-start gap-2">
 						<SectionField
-							label="X-offset"
+							label="X 轴偏移"
 							className="w-1/2"
 							beforeLabel={
 								<KeyframeToggle
 									isActive={offsetX.isKeyframedAtTime}
 									isDisabled={!isPlayheadWithinElementRange}
-									title="Toggle x-offset keyframe"
+									title="切换 X 轴偏移关键帧"
 									onToggle={offsetX.toggleKeyframe}
 								/>
 							}
@@ -691,13 +691,13 @@ function BackgroundSection({
 							/>
 						</SectionField>
 						<SectionField
-							label="Y-offset"
+							label="Y 轴偏移"
 							className="w-1/2"
 							beforeLabel={
 								<KeyframeToggle
 									isActive={offsetY.isKeyframedAtTime}
 									isDisabled={!isPlayheadWithinElementRange}
-									title="Toggle y-offset keyframe"
+									title="切换 Y 轴偏移关键帧"
 									onToggle={offsetY.toggleKeyframe}
 								/>
 							}
@@ -726,12 +726,12 @@ function BackgroundSection({
 						</SectionField>
 					</div>
 					<SectionField
-						label="Corner radius"
+						label="圆角"
 						beforeLabel={
 							<KeyframeToggle
 								isActive={cornerRadius.isKeyframedAtTime}
 								isDisabled={!isPlayheadWithinElementRange}
-								title="Toggle corner radius keyframe"
+								title="切换圆角关键帧"
 								onToggle={cornerRadius.toggleKeyframe}
 							/>
 						}
