@@ -11,6 +11,7 @@ import { EditorHeader } from "@editor/components/editor/editor-header";
 import { EditorProvider } from "@editor/components/providers/editor-provider";
 import { Onboarding } from "@editor/components/editor/onboarding";
 import { MigrationDialog } from "@editor/components/editor/dialogs/migration-dialog";
+import { TooltipProvider } from "@editor/components/ui/tooltip";
 import { usePanelStore } from "@editor/stores/panel-store";
 import { usePasteMedia } from "@editor/hooks/use-paste-media";
 
@@ -23,14 +24,19 @@ import { usePasteMedia } from "@editor/hooks/use-paste-media";
 export function OpenCutEditor({ projectId }: { projectId: string }) {
 	return (
 		<EditorProvider projectId={projectId}>
-			<div className="opencut-scope bg-background flex h-full w-full flex-col overflow-hidden">
-				<EditorHeader />
-				<div className="min-h-0 min-w-0 flex-1">
-					<EditorLayout />
+			{/* radix-ui 1.4.3 的 Tooltip.Root 强制要求 Provider 祖先，否则 render 期抛
+			    “`Tooltip` must be used within `TooltipProvider`”并炸掉整棵 React 树。
+			    上游 OpenCut 在其 app layout 层包裹，迁移时缺失——在此补回。 */}
+			<TooltipProvider>
+				<div className="opencut-scope bg-background flex h-full w-full flex-col overflow-hidden">
+					<EditorHeader />
+					<div className="min-h-0 min-w-0 flex-1">
+						<EditorLayout />
+					</div>
+					<Onboarding />
+					<MigrationDialog />
 				</div>
-				<Onboarding />
-				<MigrationDialog />
-			</div>
+			</TooltipProvider>
 		</EditorProvider>
 	);
 }
