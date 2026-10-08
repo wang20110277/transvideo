@@ -8,7 +8,7 @@ const mk = (over: Partial<MediaFile>): MediaFile =>
 describe("mediaFileToFile", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
-    (globalThis as any).window = { imageStorage: undefined };
+    vi.stubGlobal("window", { imageStorage: undefined });
   });
 
   it("已有 File 时直接返回", async () => {
@@ -31,11 +31,11 @@ describe("mediaFileToFile", () => {
   it("local-image:// 走 imageStorage.readAsBase64", async () => {
     const bytes = new Uint8Array([104, 105]); // "hi"
     const base64 = Buffer.from(bytes).toString("base64");
-    (globalThis as any).window = {
+    vi.stubGlobal("window", {
       imageStorage: {
         readAsBase64: vi.fn(async () => ({ success: true, base64, mimeType: "video/mp4" })),
       },
-    };
+    });
     const out = await mediaFileToFile(mk({ url: "local-image://videos/abc.mp4" }));
     expect(out).toBeInstanceOf(File);
     expect(out!.type).toBe("video/mp4");
@@ -47,9 +47,9 @@ describe("mediaFileToFile", () => {
   });
 
   it("readAsBase64 失败返回 null", async () => {
-    (globalThis as any).window = {
+    vi.stubGlobal("window", {
       imageStorage: { readAsBase64: vi.fn(async () => ({ success: false })) },
-    };
+    });
     expect(await mediaFileToFile(mk({ url: "local-image://x" }))).toBeNull();
   });
 });

@@ -1,5 +1,16 @@
 import type { MediaFile } from "@/types/media";
 
+/** preload 暴露的 imageStorage 桥（运行时真实形状；electron.d.ts 的 readAsBase64 声明已过时，故本地声明） */
+type ImageStorageBridge = {
+  readAsBase64: (
+    localPath: string,
+  ) => Promise<{
+    success: boolean;
+    base64?: string;
+    mimeType?: string;
+  } | null>;
+};
+
 function guessMime(type: MediaFile["type"]): string {
   if (type === "image") return "image/png";
   if (type === "audio") return "audio/mpeg";
@@ -21,7 +32,9 @@ export async function mediaFileToFile(mf: MediaFile): Promise<File | null> {
 
   // Electron 本地文件（transvideo 的 local-image:// 协议）→ preload 读 base64
   if (url.startsWith("local-image://")) {
-    const storage = (globalThis as any).window?.imageStorage;
+    // 经 globalThis 取 window：vitest 为 node 环境（无 window 全局），测试以 globalThis.window 注入桩
+    const storage = (globalThis as { window?: { imageStorage?: ImageStorageBridge } }).window
+      ?.imageStorage;
     if (!storage) return null;
     const res = await storage.readAsBase64(url);
     if (!res?.success || !res?.base64) return null;
