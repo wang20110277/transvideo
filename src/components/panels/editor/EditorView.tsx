@@ -5,7 +5,9 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useMediaPanelStore } from "@/stores/media-panel-store";
 import { editorRouter } from "@editor/shims/navigation";
+import { registerHostAssetsSection } from "@editor/host-bridge";
 import type { EditorCore } from "@editor/core";
+import { TransvideoMediaBridge } from "./TransvideoMediaBridge";
 
 const OpenCutEditor = lazy(() =>
   import("@editor/components/OpenCutEditor").then((m) => ({ default: m.OpenCutEditor })),
@@ -73,6 +75,12 @@ export function EditorView() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // 注册宿主素材分区到编辑器素材面板
+  useEffect(() => {
+    registerHostAssetsSection(<TransvideoMediaBridge />);
+    return () => registerHostAssetsSection(null);
   }, []);
 
   // 装配导航 shim
