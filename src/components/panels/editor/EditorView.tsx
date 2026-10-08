@@ -18,6 +18,12 @@ const LAST_PROJECT_KEY = "transvideo-editor-last-project";
 // （last-project 已清除，下次进入需新建）；失败时也置空以允许重试。
 let bootProjectPromise: Promise<string> | null = null;
 
+// 挂载代号：dev StrictMode 双挂载时，mount#1 的卸载收尾（异步链）可能晚于
+// mount#2 的启动执行，save.stop()/closeProject() 会杀掉新挂载正依赖的订阅与
+// 活动项目（实测症状：subs=0 后一切时间线编辑永不落盘、编辑中元素凭空消失）。
+// 每次挂载递增；卸载链执行时若发现已有更新挂载接管，则放弃破坏性收尾。
+let mountGeneration = 0;
+
 function Loading({ label }: { label: string }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3">
@@ -99,8 +105,12 @@ export function EditorView() {
   //      saveNow 在无 active 时于 try 外抛错（unhandled rejection），故 close 后再
   //      save.stop()（清定时器 + 退订）根治；重进时由启动 effect 幂等 save.start() 恢复。
   useEffect(() => {
+    const generation = ++mountGeneration;
     return () => {
       coreRef.current?.then(({ EditorCore }) => {
+        // 已有更新挂载接管（StrictMode 双挂载 / 快速重进）：放弃破坏性收尾，
+        // 否则会关闭新挂载正在使用的项目并杀掉其保存订阅。
+        if (generation !== mountGeneration) return;
         try {
           const core = EditorCore.getInstance();
           void core.save
@@ -109,6 +119,7 @@ export function EditorView() {
             .then(() => core.project.prepareExit())
             .catch(() => {})
             .finally(() => {
+              if (generation !== mountGeneration) return; // 链上各步再校验一次
               core.project.closeProject();
               core.save.stop();
             });
