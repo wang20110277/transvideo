@@ -10,7 +10,7 @@ export function getMainScene({ scenes }: { scenes: TScene[] }): TScene | null {
 export function ensureMainScene({ scenes }: { scenes: TScene[] }): TScene[] {
 	const hasMain = scenes.some((scene) => scene.isMain);
 	if (!hasMain) {
-		const mainScene = buildDefaultScene({ name: "Main scene", isMain: true });
+		const mainScene = buildDefaultScene({ name: "主场景", isMain: true });
 		return [mainScene, ...scenes];
 	}
 	return scenes;
@@ -40,7 +40,7 @@ export function canDeleteScene({ scene }: { scene: TScene }): {
 	reason?: string;
 } {
 	if (scene.isMain) {
-		return { canDelete: false, reason: "Cannot delete main scene" };
+		return { canDelete: false, reason: "无法删除主场景" };
 	}
 	return { canDelete: true };
 }

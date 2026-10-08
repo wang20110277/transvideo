@@ -318,7 +318,7 @@ export function useTimelineDragDrop({
 	const executeMediaDrop = useCallback(
 		({ target, dragData }: { target: DropTarget; dragData: MediaDragData }) => {
 			if (target.targetElement) {
-				toast.info("Replace media source is coming soon!");
+				toast.info("替换媒体源（即将上线）");
 				return;
 			}
 

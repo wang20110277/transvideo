@@ -18,27 +18,27 @@ type ShapeGraphicPreset = {
 };
 
 const LEGACY_SHAPE_PRESETS: Record<string, ShapeGraphicPreset> = {
-	square: { shapeKey: "square", name: "Square", definitionId: "rectangle" },
-	circle: { shapeKey: "circle", name: "Circle", definitionId: "ellipse" },
+	square: { shapeKey: "square", name: "正方形", definitionId: "rectangle" },
+	circle: { shapeKey: "circle", name: "圆形", definitionId: "ellipse" },
 	triangle: {
 		shapeKey: "triangle",
-		name: "Triangle",
+		name: "三角形",
 		definitionId: "polygon",
 		params: { sides: 3 },
 	},
 	hexagon: {
 		shapeKey: "hexagon",
-		name: "Hexagon",
+		name: "六边形",
 		definitionId: "polygon",
 		params: { sides: 6 },
 	},
 	diamond: {
 		shapeKey: "diamond",
-		name: "Diamond",
+		name: "菱形",
 		definitionId: "polygon",
 		params: { sides: 4 },
 	},
-	star: { shapeKey: "star", name: "Star", definitionId: "star" },
+	star: { shapeKey: "star", name: "星形", definitionId: "star" },
 };
 
 function getShapePresets(): ShapeGraphicPreset[] {

@@ -192,7 +192,7 @@ export function ensureMainTrack({
 	if (!hasMainTrack) {
 		const mainTrack: TimelineTrack = {
 			id: generateUUID(),
-			name: "Main Track",
+			name: "主轨道",
 			type: "video",
 			elements: [],
 			muted: false,

@@ -7,7 +7,7 @@ function Spinner({ className, ...props }: Omit<HugeiconsIconProps, "icon">) {
 		<HugeiconsIcon
 			icon={Loading03Icon}
 			role="status"
-			aria-label="Loading"
+			aria-label="加载中"
 			className={cn("size-4 animate-spin", className)}
 			{...props}
 		/>

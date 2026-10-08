@@ -33,7 +33,7 @@ class TranscriptionService {
 
 		return new Promise((resolve, reject) => {
 			if (!this.worker) {
-				reject(new Error("Worker not initialized"));
+				reject(new Error("转写引擎未初始化"));
 				return;
 			}
 
@@ -65,7 +65,7 @@ class TranscriptionService {
 
 					case "cancelled":
 						this.worker?.removeEventListener("message", handleMessage);
-						reject(new Error("Transcription cancelled"));
+						reject(new Error("转写已取消"));
 						break;
 				}
 			};
@@ -108,7 +108,7 @@ class TranscriptionService {
 
 		const model = TRANSCRIPTION_MODELS.find((m) => m.id === modelId);
 		if (!model) {
-			throw new Error(`Unknown model: ${modelId}`);
+			throw new Error(`未知模型：${modelId}`);
 		}
 
 		this.worker = new Worker(new URL("./worker.ts", import.meta.url), {
@@ -117,7 +117,7 @@ class TranscriptionService {
 
 		return new Promise((resolve, reject) => {
 			if (!this.worker) {
-				reject(new Error("Failed to create worker"));
+				reject(new Error("创建转写引擎失败"));
 				return;
 			}
 

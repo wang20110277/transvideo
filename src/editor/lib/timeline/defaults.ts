@@ -29,8 +29,8 @@ const defaultTextBackground = {
 
 const defaultTextElement: Omit<TextElement, "id"> = {
 	type: "text",
-	name: "Text",
-	content: "Default text",
+	name: "文字",
+	content: "默认文字",
 	fontSize: 15,
 	fontFamily: "Arial",
 	color: "#ffffff",

@@ -111,7 +111,7 @@ async function handleInit({ modelId }: { modelId: string }) {
 	} catch (error) {
 		self.postMessage({
 			type: "init-error",
-			error: error instanceof Error ? error.message : "Failed to load model",
+			error: error instanceof Error ? error.message : "加载模型失败",
 		} satisfies WorkerResponse);
 	}
 }
@@ -126,7 +126,7 @@ async function handleTranscribe({
 	if (!transcriber) {
 		self.postMessage({
 			type: "transcribe-error",
-			error: "Model not initialized",
+			error: "模型未初始化",
 		} satisfies WorkerResponse);
 		return;
 	}
@@ -170,7 +170,7 @@ async function handleTranscribe({
 		if (cancelled) return;
 		self.postMessage({
 			type: "transcribe-error",
-			error: error instanceof Error ? error.message : "Transcription failed",
+			error: error instanceof Error ? error.message : "转写失败",
 		} satisfies WorkerResponse);
 	}
 }

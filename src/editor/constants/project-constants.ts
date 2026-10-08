@@ -16,9 +16,9 @@ export const FPS_PRESETS = [
 ] as const;
 
 export const BLUR_INTENSITY_PRESETS: { label: string; value: number }[] = [
-	{ label: "Light", value: 10 },
-	{ label: "Medium", value: 50 },
-	{ label: "Heavy", value: 100 },
+	{ label: "轻", value: 10 },
+	{ label: "中", value: 50 },
+	{ label: "重", value: 100 },
 ] as const;
 
 export const DEFAULT_CANVAS_SIZE: TCanvasSize = { width: 1920, height: 1080 };

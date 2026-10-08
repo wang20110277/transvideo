@@ -134,7 +134,7 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			});
 		} catch (error) {
 			const errorMessage =
-				error instanceof Error ? error.message : "Failed to load saved sounds";
+				error instanceof Error ? error.message : "加载已收藏声音失败";
 			set({
 				savedSoundsError: errorMessage,
 				isLoadingSavedSounds: false,
@@ -151,9 +151,9 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			set({ savedSounds: savedSoundsData.sounds });
 		} catch (error) {
 			const errorMessage =
-				error instanceof Error ? error.message : "Failed to save sound";
+				error instanceof Error ? error.message : "收藏声音失败";
 			set({ savedSoundsError: errorMessage });
-			toast.error("Failed to save sound");
+			toast.error("收藏声音失败");
 			console.error("Failed to save sound:", error);
 		}
 	},
@@ -167,9 +167,9 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			}));
 		} catch (error) {
 			const errorMessage =
-				error instanceof Error ? error.message : "Failed to remove sound";
+				error instanceof Error ? error.message : "取消收藏失败";
 			set({ savedSoundsError: errorMessage });
-			toast.error("Failed to remove sound");
+			toast.error("取消收藏失败");
 			console.error("Failed to remove sound:", error);
 		}
 	},
@@ -198,9 +198,9 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			});
 		} catch (error) {
 			const errorMessage =
-				error instanceof Error ? error.message : "Failed to clear saved sounds";
+				error instanceof Error ? error.message : "清除已收藏声音失败";
 			set({ savedSoundsError: errorMessage });
-			toast.error("Failed to clear saved sounds");
+			toast.error("清除已收藏声音失败");
 			console.error("Failed to clear saved sounds:", error);
 		}
 	},
@@ -208,7 +208,7 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 	addSoundToTimeline: async ({ sound }) => {
 		const audioUrl = sound.previewUrl;
 		if (!audioUrl) {
-			toast.error("Sound file not available");
+			toast.error("声音文件不可用");
 			return false;
 		}
 
@@ -252,7 +252,7 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 			toast.error(
 				error instanceof Error
 					? error.message
-					: "Failed to add sound to timeline",
+					: "添加声音到时间线失败",
 				{ id: `sound-${sound.id}` },
 			);
 			return false;

@@ -191,7 +191,7 @@ async function resolveAudioBufferForElement({
 
 		const response = await fetch(element.sourceUrl);
 		if (!response.ok) {
-			throw new Error(`Library audio fetch failed: ${response.status}`);
+			throw new Error(`音频库获取失败：${response.status}`);
 		}
 
 		const arrayBuffer = await response.arrayBuffer();
@@ -320,7 +320,7 @@ async function fetchLibraryAudioSource({
 	try {
 		const response = await fetch(element.sourceUrl);
 		if (!response.ok) {
-			throw new Error(`Library audio fetch failed: ${response.status}`);
+			throw new Error(`音频库获取失败：${response.status}`);
 		}
 
 		const blob = await response.blob();
@@ -356,7 +356,7 @@ async function fetchLibraryAudioClip({
 	try {
 		const response = await fetch(element.sourceUrl);
 		if (!response.ok) {
-			throw new Error(`Library audio fetch failed: ${response.status}`);
+			throw new Error(`音频库获取失败：${response.status}`);
 		}
 
 		const blob = await response.blob();

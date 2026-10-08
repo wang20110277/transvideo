@@ -329,11 +329,11 @@ const ColorPicker = forwardRef<HTMLDivElement, ColorPickerProps>(
 					<header className="border-b flex justify-between items-center pb-2 px-2">
 						<Select defaultValue="custom">
 							<SelectTrigger variant="outline">
-								<SelectValue placeholder="Select a mode" />
+								<SelectValue placeholder="选择模式" />
 							</SelectTrigger>
 							<SelectContent position="popper">
-								<SelectItem value="custom">Custom</SelectItem>
-								<SelectItem value="saved">Saved</SelectItem>
+								<SelectItem value="custom">自定义</SelectItem>
+								<SelectItem value="saved">已保存</SelectItem>
 							</SelectContent>
 						</Select>
 						<div>

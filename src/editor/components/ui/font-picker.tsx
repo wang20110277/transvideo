@@ -19,9 +19,9 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { TextIcon } from "@hugeicons/core-free-icons";
 
 const FONT_TABS = [
-	{ key: "all", label: "All fonts" },
-	{ key: "my-fonts", label: "My fonts" },
-	{ key: "favorites", label: "Favorites" },
+	{ key: "all", label: "全部字体" },
+	{ key: "my-fonts", label: "我的字体" },
+	{ key: "favorites", label: "收藏" },
 ] as const;
 
 type FontTab = (typeof FONT_TABS)[number]["key"];
@@ -82,8 +82,7 @@ export function FontPicker({
 		}
 	}, [open]);
 
-	const activeTabLabel =
-		FONT_TABS.find((t) => t.key === activeTab)?.label.toLowerCase() ?? "";
+	const activeTabLabel = FONT_TABS.find((t) => t.key === activeTab)?.label ?? "";
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
@@ -98,7 +97,7 @@ export function FontPicker({
 						<HugeiconsIcon icon={TextIcon} />
 					</span>
 					<span className="truncate" style={{ fontFamily: defaultValue }}>
-						{defaultValue ?? "Select a font"}
+						{defaultValue ?? "选择字体"}
 					</span>
 				</div>
 				<ChevronDown className="size-3 shrink-0 opacity-50" />
@@ -120,7 +119,7 @@ export function FontPicker({
 					<Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 shrink-0 opacity-50" />
 					<Input
 						ref={searchInputRef}
-						placeholder={`Search ${activeTabLabel}...`}
+						placeholder={`搜索${activeTabLabel}…`}
 						value={search}
 						onChange={(event) => setSearch(event.target.value)}
 						size="xs"
@@ -146,16 +145,16 @@ export function FontPicker({
 				</div>
 				{status === "loading" && (
 					<div className="py-8 text-center text-sm text-muted-foreground">
-						Loading fonts...
+						正在加载字体…
 					</div>
 				)}
 				{status === "error" && (
 					<div className="flex flex-col items-center gap-3 py-8 px-4">
 						<p className="text-sm text-muted-foreground text-center">
-							Failed to load font previews.
+							加载字体预览失败。
 						</p>
 						<Button variant="outline" size="sm" onClick={handleRetry}>
-							Retry
+							重试
 						</Button>
 					</div>
 				)}
@@ -163,7 +162,7 @@ export function FontPicker({
 					fontNames.length > 0 &&
 					filteredFonts.length === 0 && (
 						<div className="py-6 text-center text-sm text-muted-foreground">
-							No fonts found.
+							未找到字体。
 						</div>
 					)}
 				{status === "idle" && atlas && filteredFonts.length > 0 && (

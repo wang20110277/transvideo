@@ -59,7 +59,7 @@ const BlurPreview = memo(
 				)}
 				onClick={onSelect}
 				type="button"
-				aria-label={`选择 ${blur.label} 模糊`}
+				aria-label={`选择${blur.label}模糊`}
 			>
 				<canvas
 					ref={canvasRef}

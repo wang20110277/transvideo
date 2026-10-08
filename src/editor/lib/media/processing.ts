@@ -21,12 +21,12 @@ const getStorageLimitDescription = ({
 	const fileSizeLabel = formatStorageBytes({ bytes: fileSize });
 
 	if (availableBytes === null) {
-		return `File size is ${fileSizeLabel}.`;
+		return `文件大小为 ${fileSizeLabel}。`;
 	}
 
-	return `File size is ${fileSizeLabel}, but only ${formatStorageBytes({
+	return `文件大小为 ${fileSizeLabel}，但浏览器存储中仅剩 ${formatStorageBytes({
 		bytes: availableBytes,
-	})} is safely available in browser storage.`;
+	})} 可安全使用。`;
 };
 
 const getThumbnailSize = ({
@@ -186,7 +186,7 @@ export async function processMediaAssets({
 		const fileType = getMediaTypeFromFile({ file });
 
 		if (!fileType) {
-			toast.error(`Unsupported file type: ${file.name}`);
+			toast.error(`不支持的文件类型：${file.name}`);
 			continue;
 		}
 
@@ -195,7 +195,7 @@ export async function processMediaAssets({
 		});
 
 		if (!storageCheck.canStore) {
-			toast.error(`Not enough browser storage for ${file.name}`, {
+			toast.error(`浏览器存储空间不足，无法导入 ${file.name}`, {
 				description: getStorageLimitDescription({
 					fileSize: file.size,
 					availableBytes: storageCheck.availableBytes,
@@ -263,7 +263,7 @@ export async function processMediaAssets({
 			}
 		} catch (error) {
 			console.error("Error processing file:", file.name, error);
-			toast.error(`Failed to process ${file.name}`);
+			toast.error(`处理 ${file.name} 失败`);
 			URL.revokeObjectURL(url); // Clean up on error
 		}
 	}
