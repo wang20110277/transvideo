@@ -20,7 +20,9 @@ export function GridPopover({ children }: { children: React.ReactNode }) {
 
 	return (
 		<Popover>
-			<PopoverTrigger>{children}</PopoverTrigger>
+			{/* asChild：children 是 toolbar 的 <Button>，避免 Radix 再包一层 <button>
+			    造成 button 嵌套 button（validateDOMNesting 告警） */}
+			<PopoverTrigger asChild>{children}</PopoverTrigger>
 			<PopoverContent sideOffset={8} className="w-60 px-0">
 				<div className="flex flex-col gap-2 px-4">
 					<Label>Guides</Label>
