@@ -9,7 +9,7 @@ function CustomGuideOptions() {
 		<div className="flex gap-2">
 			<Button variant="outline" size="sm" className="flex-1">
 				<HugeiconsIcon icon={PlusSignIcon} />
-				Add guide line
+				添加参考线
 			</Button>
 		</div>
 	);
@@ -17,7 +17,7 @@ function CustomGuideOptions() {
 
 export const customGuide = {
 	id: "custom",
-	label: "Custom",
+	label: "自定义",
 	renderPreview: () => <HugeiconsIcon size={16} icon={RulerIcon} />,
 	renderTriggerIcon: () => <HugeiconsIcon icon={RulerIcon} />,
 	renderOverlay: () => null,

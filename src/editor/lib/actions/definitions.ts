@@ -5,14 +5,14 @@ import type {
 import type { TActionWithOptionalArgs } from "./types";
 
 export type TActionCategory =
-	| "playback"
-	| "navigation"
-	| "editing"
-	| "selection"
-	| "history"
-	| "timeline"
-	| "controls"
-	| "assets";
+	| "播放"
+	| "导航"
+	| "编辑"
+	| "选择"
+	| "历史"
+	| "时间线"
+	| "控制"
+	| "素材";
 
 export interface TActionBaseDefinition {
 	description: string;
@@ -26,125 +26,125 @@ export interface TActionDefinition extends TActionBaseDefinition {
 
 export const ACTIONS = {
 	"toggle-play": {
-		description: "Play/Pause",
-		category: "playback",
+		description: "播放/暂停",
+		category: "播放",
 	},
 	"stop-playback": {
-		description: "Stop playback",
-		category: "playback",
+		description: "停止播放",
+		category: "播放",
 	},
 	"seek-forward": {
-		description: "Seek forward 1 second",
-		category: "playback",
+		description: "向前跳转 1 秒",
+		category: "播放",
 		args: { seconds: "number" },
 	},
 	"seek-backward": {
-		description: "Seek backward 1 second",
-		category: "playback",
+		description: "向后跳转 1 秒",
+		category: "播放",
 		args: { seconds: "number" },
 	},
 	"frame-step-forward": {
-		description: "Frame step forward",
-		category: "navigation",
+		description: "逐帧前进",
+		category: "导航",
 	},
 	"frame-step-backward": {
-		description: "Frame step backward",
-		category: "navigation",
+		description: "逐帧后退",
+		category: "导航",
 	},
 	"jump-forward": {
-		description: "Jump forward 5 seconds",
-		category: "navigation",
+		description: "向前跳转 5 秒",
+		category: "导航",
 		args: { seconds: "number" },
 	},
 	"jump-backward": {
-		description: "Jump backward 5 seconds",
-		category: "navigation",
+		description: "向后跳转 5 秒",
+		category: "导航",
 		args: { seconds: "number" },
 	},
 	"goto-start": {
-		description: "Go to timeline start",
-		category: "navigation",
+		description: "跳到时间线开头",
+		category: "导航",
 	},
 	"goto-end": {
-		description: "Go to timeline end",
-		category: "navigation",
+		description: "跳到时间线末尾",
+		category: "导航",
 	},
 	split: {
-		description: "Split elements at playhead",
-		category: "editing",
+		description: "在播放头处分割元素",
+		category: "编辑",
 	},
 	"split-left": {
-		description: "Split and remove left",
-		category: "editing",
+		description: "分割并删除左侧",
+		category: "编辑",
 	},
 	"split-right": {
-		description: "Split and remove right",
-		category: "editing",
+		description: "分割并删除右侧",
+		category: "编辑",
 	},
 	"delete-selected": {
-		description: "Delete selected elements",
-		category: "editing",
+		description: "删除所选元素",
+		category: "编辑",
 	},
 	"copy-selected": {
-		description: "Copy selected elements",
-		category: "editing",
+		description: "复制所选元素",
+		category: "编辑",
 	},
 	"paste-copied": {
-		description: "Paste elements at playhead",
-		category: "editing",
+		description: "在播放头处粘贴元素",
+		category: "编辑",
 	},
 	"toggle-snapping": {
-		description: "Toggle snapping",
-		category: "editing",
+		description: "切换吸附",
+		category: "编辑",
 	},
 	"toggle-ripple-editing": {
-		description: "Toggle ripple editing",
-		category: "editing",
+		description: "切换波纹编辑",
+		category: "编辑",
 	},
 	"select-all": {
-		description: "Select all elements",
-		category: "selection",
+		description: "全选元素",
+		category: "选择",
 	},
 	"cancel-interaction": {
-		description: "Cancel current interaction",
-		category: "controls",
+		description: "取消当前交互",
+		category: "控制",
 	},
 	"deselect-all": {
-		description: "Deselect all elements",
-		category: "selection",
+		description: "取消选择所有元素",
+		category: "选择",
 	},
 	"duplicate-selected": {
-		description: "Duplicate selected element",
-		category: "selection",
+		description: "创建所选元素副本",
+		category: "选择",
 	},
 	"toggle-elements-muted-selected": {
-		description: "Mute/unmute selected elements",
-		category: "selection",
+		description: "静音/取消静音所选元素",
+		category: "选择",
 	},
 	"toggle-elements-visibility-selected": {
-		description: "Show/hide selected elements",
-		category: "selection",
+		description: "显示/隐藏所选元素",
+		category: "选择",
 	},
 	"toggle-bookmark": {
-		description: "Toggle bookmark at playhead",
-		category: "timeline",
+		description: "在播放头处添加/移除书签",
+		category: "时间线",
 	},
 	undo: {
-		description: "Undo",
-		category: "history",
+		description: "撤销",
+		category: "历史",
 	},
 	redo: {
-		description: "Redo",
-		category: "history",
+		description: "重做",
+		category: "历史",
 	},
 	"remove-media-asset": {
-		description: "Remove media asset",
-		category: "assets",
+		description: "移除素材",
+		category: "素材",
 		args: { projectId: "string", assetId: "string" },
 	},
 	"remove-media-assets": {
-		description: "Remove media assets",
-		category: "assets",
+		description: "移除多个素材",
+		category: "素材",
 		args: { projectId: "string", assetIds: "string[]" },
 	},
 } as const satisfies Record<string, TActionBaseDefinition>;

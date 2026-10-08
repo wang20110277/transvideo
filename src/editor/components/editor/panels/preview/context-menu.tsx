@@ -26,8 +26,8 @@ export function PreviewContextMenu({
 		const result = await editor.renderer.copySnapshot();
 
 		if (!result.success) {
-			toast.error("Failed to copy snapshot", {
-				description: result.error ?? "Please try again",
+			toast.error("复制截图失败", {
+				description: result.error ?? "请重试",
 			});
 			return;
 		}
@@ -37,8 +37,8 @@ export function PreviewContextMenu({
 		const result = await editor.renderer.saveSnapshot();
 
 		if (!result.success) {
-			toast.error("Failed to save snapshot", {
-				description: result.error ?? "Please try again",
+			toast.error("保存截图失败", {
+				description: result.error ?? "请重试",
 			});
 			return;
 		}
@@ -47,17 +47,17 @@ export function PreviewContextMenu({
 	return (
 		<ContextMenuContent className="w-56" container={containerRef.current}>
 			<ContextMenuItem onClick={viewport.fitToScreen} inset>
-				Fit to screen
+				适应屏幕
 			</ContextMenuItem>
 			<ContextMenuSeparator />
 			<ContextMenuItem onClick={onToggleFullscreen} inset>
-				Full screen
+				全屏
 			</ContextMenuItem>
 			<ContextMenuItem onClick={handleSaveSnapshot} inset>
-				Save snapshot
+				保存截图
 			</ContextMenuItem>
 			<ContextMenuItem onClick={handleCopySnapshot} inset>
-				Copy snapshot
+				复制截图
 			</ContextMenuItem>
 			<ContextMenuSeparator />
 			<ContextMenuCheckboxItem
@@ -66,7 +66,7 @@ export function PreviewContextMenu({
 					setOverlayVisibility({ overlay: "bookmarks", isVisible: !!checked })
 				}
 			>
-				Show bookmark notes
+				显示书签备注
 			</ContextMenuCheckboxItem>
 		</ContextMenuContent>
 	);

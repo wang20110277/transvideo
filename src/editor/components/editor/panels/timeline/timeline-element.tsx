@@ -326,7 +326,7 @@ export function TimelineElement({
 					action="split"
 					icon={<HugeiconsIcon icon={ScissorIcon} />}
 				>
-					Split
+					分割
 				</ActionMenuItem>
 				<CopyMenuItem />
 				{canElementHaveAudio(element) && hasAudio && (
@@ -348,7 +348,7 @@ export function TimelineElement({
 						action="duplicate-selected"
 						icon={<HugeiconsIcon icon={Copy01Icon} />}
 					>
-						Duplicate
+						创建副本
 					</ActionMenuItem>
 				)}
 				{selectedElements.length === 1 && hasMediaId(element) && (
@@ -359,13 +359,13 @@ export function TimelineElement({
 								handleRevealInMedia({ event })
 							}
 						>
-							Reveal media
+							在媒体中显示
 						</ContextMenuItem>
 						<ContextMenuItem
 							icon={<HugeiconsIcon icon={Exchange01Icon} />}
 							disabled
 						>
-							Replace media
+							替换媒体
 						</ContextMenuItem>
 					</>
 				)}
@@ -490,7 +490,7 @@ function ResizeHandle({
 			)}
 			onMouseDown={(event) => handleResizeStart({ event, elementId, side })}
 			onClick={(event) => event.stopPropagation()}
-			aria-label={`${isLeft ? "Left" : "Right"} resize handle`}
+			aria-label={`${isLeft ? "左侧" : "右侧"}调整手柄`}
 		></button>
 	);
 }
@@ -563,7 +563,7 @@ function KeyframeIndicators({
 						indicatorTime: indicator.time,
 					})
 				}
-				aria-label="Select keyframe"
+				aria-label="选择关键帧"
 			>
 				<HugeiconsIcon
 					icon={KeyframeIcon}
@@ -825,7 +825,7 @@ function CopyMenuItem() {
 			action="copy-selected"
 			icon={<HugeiconsIcon icon={Copy01Icon} />}
 		>
-			Copy
+			复制
 		</ActionMenuItem>
 	);
 }
@@ -852,7 +852,7 @@ function MuteMenuItem({
 
 	return (
 		<ActionMenuItem action="toggle-elements-muted-selected" icon={getIcon()}>
-			{isMuted ? "Unmute" : "Mute"}
+			{isMuted ? "取消静音" : "静音"}
 		</ActionMenuItem>
 	);
 }
@@ -884,7 +884,7 @@ function VisibilityMenuItem({
 			action="toggle-elements-visibility-selected"
 			icon={getIcon()}
 		>
-			{isHidden ? "Show" : "Hide"}
+			{isHidden ? "显示" : "隐藏"}
 		</ActionMenuItem>
 	);
 }
@@ -907,8 +907,8 @@ function DeleteMenuItem({
 			icon={<HugeiconsIcon icon={Delete02Icon} />}
 		>
 			{isMultipleSelected && isCurrentElementSelected
-				? `Delete ${selectedCount} elements`
-				: `Delete ${elementType === "text" ? "text" : "clip"}`}
+				? `删除 ${selectedCount} 个元素`
+				: `删除${elementType === "text" ? "文字" : "片段"}`}
 		</ActionMenuItem>
 	);
 }

@@ -67,7 +67,7 @@ export function TimelineTrackContent({
 			<button
 				type="button"
 				className="absolute inset-0 m-0 size-full appearance-none border-0 bg-transparent p-0"
-				aria-label={`Select ${track.name} track`}
+				aria-label={`选择 ${track.name} 轨道`}
 			onMouseUp={(event) => {
 					if (shouldIgnoreClick?.()) return;
 				onTrackMouseUp?.(event);

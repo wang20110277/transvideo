@@ -18,22 +18,21 @@ export function StoragePersistenceDialog() {
 		<Dialog open={showDialog} onOpenChange={(open) => !open && onDismiss()}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle>Don't lose your projects</DialogTitle>
+					<DialogTitle>避免项目丢失</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
 					<p className="text-base text-muted-foreground">
-						Your browser can automatically delete your projects when storage
-						runs low.
+						当浏览器存储空间不足时，可能会自动删除你的项目。
 					</p>
 					<p className="text-base text-muted-foreground">
-						Allow OpenCut to protect them?
+						允许 OpenCut 保护它们吗？
 					</p>
 				</DialogBody>
 				<DialogFooter>
 					<Button variant="outline" onClick={onDismiss}>
-						Not now
+						暂不
 					</Button>
-					<Button onClick={onConfirm}>Allow</Button>
+					<Button onClick={onConfirm}>允许</Button>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
