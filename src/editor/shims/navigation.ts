@@ -12,13 +12,29 @@ export const useRouterShimStore = create<RouterShimState>(() => ({
   navigateFn: null,
 }));
 
-export function useRouter() {
-  const navigateFn = useRouterShimStore((s) => s.navigateFn);
-  return {
-    push: (path: string) => navigateFn?.(path),
-    replace: (path: string) => navigateFn?.(path),
-    back: () => navigateFn?.("/projects"),
-  };
+type Router = {
+  push: (path: string) => void;
+  replace: (path: string) => void;
+  back: () => void;
+};
+
+let cachedRouter: Router | null = null;
+
+/**
+ * 稳定引用的 router shim：返回对象恒为同一引用。editor-provider 的 effect 以
+ * [projectId, router] 为 deps，若每次渲染返回新字面量对象，任意重渲染（如自动保存
+ * 更换 active 对象身份）都会令 loadProject 整轮重跑（闪 reload）。方法内经
+ * getState() 调用时取最新 navigateFn，无闭包过期问题。
+ */
+export function useRouter(): Router {
+  if (!cachedRouter) {
+    cachedRouter = {
+      push: (path) => useRouterShimStore.getState().navigateFn?.(path),
+      replace: (path) => useRouterShimStore.getState().navigateFn?.(path),
+      back: () => useRouterShimStore.getState().navigateFn?.("/projects"),
+    };
+  }
+  return cachedRouter;
 }
 
 export function useParams(): { project_id?: string } {

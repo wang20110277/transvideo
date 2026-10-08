@@ -13,6 +13,11 @@ const OpenCutEditor = lazy(() =>
 
 const LAST_PROJECT_KEY = "transvideo-editor-last-project";
 
+// 「读上次项目，没有则新建」的模块级单例 promise：dev StrictMode 双挂载时两个
+// effect 共享同一次 createNewProject，避免双跑留孤儿项目。显式退出编辑器时置空
+// （last-project 已清除，下次进入需新建）；失败时也置空以允许重试。
+let bootProjectPromise: Promise<string> | null = null;
+
 function Loading({ label }: { label: string }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3">
@@ -31,18 +36,25 @@ export function EditorView() {
   const getCore = () =>
     (coreRef.current ??= import("@editor/core") as Promise<{ EditorCore: typeof EditorCore }>);
 
-  // 启动：打开上次项目，没有则新建
+  // 启动：打开上次项目，没有则新建（bootProjectPromise 防重，见其声明处注释）
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const { EditorCore } = await getCore();
-        EditorCore.getInstance(); // 触发单例初始化（注册 effects/masks、启动自动保存）
-        let id = localStorage.getItem(LAST_PROJECT_KEY);
-        if (!id) {
-          id = await EditorCore.getInstance().project.createNewProject({ name: "未命名项目" });
-          localStorage.setItem(LAST_PROJECT_KEY, id);
-        }
+        const core = EditorCore.getInstance(); // 触发单例初始化（注册 effects/masks、启动自动保存）
+        core.save.start(); // 幂等：单例已存在时构造器不会重跑；上次卸载 stop 过则在此重挂订阅
+        const id = await (bootProjectPromise ??= (async () => {
+          let id = localStorage.getItem(LAST_PROJECT_KEY);
+          if (!id) {
+            id = await core.project.createNewProject({ name: "未命名项目" });
+            localStorage.setItem(LAST_PROJECT_KEY, id);
+          }
+          return id;
+        })().catch((err: unknown) => {
+          bootProjectPromise = null; // 失败允许下次进入重试
+          throw err;
+        }));
         if (cancelled) return;
         editorRouter.setProjectId(id);
         setProjectId(id);
@@ -68,6 +80,7 @@ export function EditorView() {
       } else {
         // /projects、/ 等一律退出编辑器
         localStorage.removeItem(LAST_PROJECT_KEY);
+        bootProjectPromise = null; // 下次进入重新解析（last-project 已清除，将新建项目）
         editorRouter.setProjectId(null);
         setProjectId(null);
         setActiveTab("dashboard");
@@ -76,14 +89,29 @@ export function EditorView() {
     return () => editorRouter.setNavigateFn(null);
   }, [setActiveTab]);
 
-  // 卸载：best-effort 保存并关闭项目（SaveManager 有周期自动保存兜底）
+  // 卸载：best-effort 保存后再关闭。顺序不可倒置——必须等 prepareExit（缩略图渲染
+  // + save.flush）完成后才 closeProject：close 会同步置 active=null，若先跑，updateThumbnail
+  // 撞 `if (!this.active) return`、flush 落空，编辑丢失。SaveManager 无周期定时器，只有
+  // 变更驱动的 markDirty + 800ms debounce（save-manager.ts），故：
+  //   1. 先显式 flush() 把 debounce 窗口内的未落盘编辑落盘（prepareExit 仅在缩略图
+  //      有更新时才 flush，不覆盖纯属性编辑的场景）；
+  //   2. closeProject 内的 clearScenes 会触发 markDirty 排入新的 debounce 定时器，其
+  //      saveNow 在无 active 时于 try 外抛错（unhandled rejection），故 close 后再
+  //      save.stop()（清定时器 + 退订）根治；重进时由启动 effect 幂等 save.start() 恢复。
   useEffect(() => {
     return () => {
       coreRef.current?.then(({ EditorCore }) => {
         try {
-          const p = EditorCore.getInstance().project;
-          void p.prepareExit();
-          p.closeProject();
+          const core = EditorCore.getInstance();
+          void core.save
+            .flush()
+            .catch(() => {})
+            .then(() => core.project.prepareExit())
+            .catch(() => {})
+            .finally(() => {
+              core.project.closeProject();
+              core.save.stop();
+            });
         } catch {
           /* 项目可能本就未打开 */
         }
