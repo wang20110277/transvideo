@@ -26,6 +26,7 @@ import {
 	TooltipTrigger,
 } from "@editor/components/ui/tooltip";
 import { TIMELINE_CONSTANTS } from "@editor/constants/timeline-constants";
+import { HostAssetsSection } from "@editor/host-bridge";
 import { useEditor } from "@editor/hooks/use-editor";
 import { useFileUpload } from "@editor/hooks/use-file-upload";
 import { invokeAction } from "@editor/lib/actions";
@@ -204,6 +205,7 @@ export function MediaView() {
 				contentClassName="h-full"
 				{...dragProps}
 			>
+				<HostAssetsSection />
 				{isDragOver || filteredMediaItems.length === 0 ? (
 					<MediaDragOverlay
 						isVisible={true}
