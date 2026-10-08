@@ -248,7 +248,10 @@ const ANIMATION_PROPERTY_REGISTRY: Record<
 export function isAnimationPropertyPath(
 	propertyPath: string,
 ): propertyPath is AnimationPropertyPath {
-	return Object.hasOwn(ANIMATION_PROPERTY_REGISTRY, propertyPath);
+	return Object.prototype.hasOwnProperty.call(
+		ANIMATION_PROPERTY_REGISTRY,
+		propertyPath,
+	);
 }
 
 export function getAnimationPropertyDefinition({

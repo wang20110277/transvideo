@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { getSplitMaskStrokeSegment } from "@editor/lib/masks/definitions/split";
 import { getMaskSnapGeometry } from "@editor/lib/masks/geometry";
 import { snapMaskInteraction } from "@editor/lib/masks/snap";
@@ -31,6 +31,7 @@ function buildSplitParams(
 		inverted: false,
 		strokeColor: "#ffffff",
 		strokeWidth: 0,
+		strokeAlign: "center",
 		centerX: 0,
 		centerY: 0,
 		rotation: 0,
@@ -46,6 +47,7 @@ function buildRectangleParams(
 		inverted: false,
 		strokeColor: "#ffffff",
 		strokeWidth: 0,
+		strokeAlign: "center",
 		centerX: 0,
 		centerY: 0,
 		width: 0.4,

@@ -74,7 +74,7 @@ function getStickerNameFromId({ stickerId }: { stickerId: string }): string {
 		return stickerId;
 	}
 	return (
-		stickerIdParts.slice(1).join(":").split(":").pop()?.replaceAll("-", " ") ??
+		stickerIdParts.slice(1).join(":").split(":").pop()?.replace(/-/g, " ") ??
 		stickerId
 	);
 }

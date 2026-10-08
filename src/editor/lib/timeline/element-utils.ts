@@ -189,7 +189,7 @@ export function buildStickerElement({
 	intrinsicHeight?: number;
 }): CreateStickerElement {
 	const stickerNameFromId =
-		stickerId.split(":").slice(1).pop()?.replaceAll("-", " ") ?? stickerId;
+		stickerId.split(":").slice(1).pop()?.replace(/-/g, " ") ?? stickerId;
 	return {
 		type: "sticker",
 		name: name ?? stickerNameFromId,

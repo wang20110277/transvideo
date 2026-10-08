@@ -20,7 +20,7 @@ interface TimelinePlayheadProps {
 	rulerScrollRef: React.RefObject<HTMLDivElement | null>;
 	tracksScrollRef: React.RefObject<HTMLDivElement | null>;
 	timelineRef: React.RefObject<HTMLDivElement | null>;
-	playheadRef?: React.RefObject<HTMLDivElement | null>;
+	playheadRef?: React.RefObject<HTMLDivElement>;
 	isSnappingToPlayhead?: boolean;
 }
 

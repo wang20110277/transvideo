@@ -134,6 +134,8 @@ function NumberField({
 	ref,
 	...props
 }: NumberFieldProps & { ref?: React.Ref<HTMLInputElement> }) {
+	// React 19 风格 ref 形参：React 18 下无人传入，显式吞掉避免透传到 DOM
+	void ref;
 	const iconRef = useRef<HTMLButtonElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const ghostRef = useRef<HTMLSpanElement>(null);

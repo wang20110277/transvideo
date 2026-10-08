@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { transformProjectV5ToV6 } from "../transformers/v5-to-v6";
 import { v5Project } from "./fixtures";
 
@@ -35,7 +35,7 @@ describe("V5 to V6 Migration", () => {
 				version: 6,
 				scenes: [
 					{
-						...(v5Project as { scenes: unknown[] }).scenes[0],
+						...(v5Project as { scenes: object[] }).scenes[0],
 						bookmarks: [{ time: 2 }, { time: 5 }],
 					},
 				],

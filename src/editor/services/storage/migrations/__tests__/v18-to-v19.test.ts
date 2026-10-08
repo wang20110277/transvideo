@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { transformProjectV18ToV19 } from "../transformers/v18-to-v19";
 
 describe("V18 to V19 Migration", () => {

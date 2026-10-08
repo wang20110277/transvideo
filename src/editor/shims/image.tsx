@@ -10,6 +10,8 @@ interface ImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   priority?: boolean;
   quality?: number;
   placeholder?: unknown;
+  /** next/image 的 unoptimized 选项：Electron 内全部本地加载，接受并忽略 */
+  unoptimized?: boolean;
   onLoad?: (e: React.SyntheticEvent<HTMLImageElement>) => void;
 }
 
