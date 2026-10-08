@@ -66,7 +66,6 @@ export type Key =
 	| "delete"
 	| "home"
 	| "end";
-/* eslint-enable */
 
 export type ModifierBasedShortcutKey = `${ModifierKeys}+${Key}`;
 // Singular keybindings (these will be disabled when an input-ish area has been focused)

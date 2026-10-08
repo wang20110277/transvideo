@@ -143,11 +143,9 @@ function migrateStickerElement({ element }: { element: unknown }): unknown {
 		return element;
 	}
 
-	const {
-		iconName: _legacyIconName,
-		color: _legacyColor,
-		...remaining
-	} = element;
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构剔除 legacy iconName/color 字段（rest-exclusion 惯用法）
+	const { iconName: _legacyIconName, color: _legacyColor, ...remaining } =
+		element;
 	return normalizedStickerId
 		? { ...remaining, stickerId: normalizedStickerId }
 		: remaining;

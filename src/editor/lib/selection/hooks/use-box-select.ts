@@ -41,7 +41,9 @@ export function useBoxSelect<TId>({
 		null,
 	);
 	const justFinishedSelectingRef = useRef(false);
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- 回退默认值每次渲染重建，上游写法保持
 	const shouldStartSelectionCheck = shouldStartSelection ?? (() => true);
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- 回退默认值每次渲染重建，上游写法保持
 	const getIsAdditiveSelectionCheck =
 		getIsAdditiveSelection ??
 		((event: React.MouseEvent<Element>) => event.ctrlKey || event.metaKey);
@@ -152,6 +154,7 @@ export function useBoxSelect<TId>({
 		return () => {
 			document.body.style.userSelect = previousBodyUserSelect;
 			if (containerRef.current) {
+				// eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup 中读取 ref.current，上游写法保持
 				containerRef.current.style.userSelect = previousContainerUserSelect;
 			}
 		};

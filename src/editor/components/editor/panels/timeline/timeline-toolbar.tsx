@@ -118,7 +118,7 @@ function ToolbarLeftSection() {
 					icon={<SplitSquareHorizontal />}
 					tooltip="Separate audio (coming soon)"
 					disabled={true}
-					onClick={({ event: _event }) => {}}
+					onClick={() => {}}
 				/>
 
 				<ToolbarButton
@@ -133,7 +133,7 @@ function ToolbarLeftSection() {
 					icon={<HugeiconsIcon icon={SnowIcon} />}
 					tooltip="Freeze frame (coming soon)"
 					disabled={true}
-					onClick={({ event: _event }) => {}}
+					onClick={() => {}}
 				/>
 
 				<ToolbarButton

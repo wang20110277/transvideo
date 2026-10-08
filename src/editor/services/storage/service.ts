@@ -123,6 +123,7 @@ class StorageService {
 			return {
 				...track,
 				elements: track.elements.map((element) => {
+					// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构剔除不可序列化的 buffer 字段
 					const { buffer: _buffer, ...rest } = element;
 					return rest;
 				}),

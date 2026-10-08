@@ -221,6 +221,7 @@ export function useTimelineZoom({
 				});
 			}
 		}, 300);
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- refs are stable（上游 biome-ignore 同义）
 	}, [zoomLevel, editor]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable
@@ -250,6 +251,7 @@ export function useTimelineZoom({
 			observer.observe(scrollElement);
 			return () => observer.disconnect();
 		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- refs are stable（上游 biome-ignore 同义）
 	}, [initialScrollLeft]);
 
 	useEffect(() => {

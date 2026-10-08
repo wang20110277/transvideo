@@ -54,7 +54,7 @@ export const usePanelStore = create<PanelState>()(
 							tools?: number;
 							preview?: number;
 							properties?: number;
-					  }
+						}
 					| undefined
 					| null;
 

@@ -233,7 +233,9 @@ export class AudioManager {
 		for (const source of this.queuedSources) {
 			try {
 				source.stop();
-			} catch {}
+			} catch {
+				// Source may already be stopped
+			}
 			source.disconnect();
 		}
 		this.queuedSources.clear();

@@ -91,7 +91,7 @@ export class VideoCache {
 		if (!sinkData.iterator) return null;
 
 		try {
-			while (true) {
+			for (;;) {
 				// Wait for any pending prefetch to finish before touching iterator
 				if (sinkData.prefetching && sinkData.prefetchPromise) {
 					await sinkData.prefetchPromise;

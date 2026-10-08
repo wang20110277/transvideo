@@ -86,6 +86,7 @@ function migrateTextElement({ element }: { element: unknown }): unknown {
 			? element.backgroundColor
 			: "transparent";
 
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构剔除已废弃的 backgroundColor 字段
 	const { backgroundColor: _removed, ...rest } = element;
 
 	return {

@@ -241,6 +241,7 @@ function PreviewCanvas({
 				cancelAnimationFrame(panRafId);
 			}
 		};
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖 viewport 的部分方法，上游按需声明
 	}, [viewport.canPan, viewport.panByScreenDelta, viewport.scaleZoom]);
 
 	return (

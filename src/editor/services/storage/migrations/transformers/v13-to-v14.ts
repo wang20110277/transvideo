@@ -94,6 +94,7 @@ function migrateSplitMask({ mask }: { mask: unknown }): unknown {
 	const x = (position - 0.5) * Math.cos(angleRad);
 	const y = (position - 0.5) * Math.sin(angleRad);
 
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构剔除已废弃的 position 字段
 	const { position: _removed, ...restParams } = params as Record<
 		string,
 		unknown

@@ -23,7 +23,7 @@ export type WorkerResponse =
 			type: "transcribe-complete";
 			text: string;
 			segments: TranscriptionSegment[];
-	  }
+		}
 	| { type: "transcribe-error"; error: string }
 	| { type: "cancelled" };
 

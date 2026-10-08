@@ -7,7 +7,7 @@ interface RouterShimState {
   navigateFn: NavigateFn | null;
 }
 
-export const useRouterShimStore = create<RouterShimState>((set) => ({
+export const useRouterShimStore = create<RouterShimState>(() => ({
   projectId: null,
   navigateFn: null,
 }));

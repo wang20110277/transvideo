@@ -344,6 +344,7 @@ export function useEditorActions() {
 				elements: selectedElements,
 			});
 			const items = results.map(({ track, element }) => {
+				// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构剔除 id（rest-exclusion 惯用法）
 				const { id: _, ...elementWithoutId } = element;
 				return {
 					trackId: track.id,

@@ -2,6 +2,7 @@
 // transvideo 版仅保留本地收藏功能，搜索返回空结果。
 import type { SoundEffect } from "@editor/lib/sounds/types";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- shim 保留上游 hook 签名，参数暂不使用
 export function useSoundSearch(_params: {
 	query: string;
 	commercialOnly: boolean;
