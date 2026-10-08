@@ -68,7 +68,7 @@ export function TransvideoMediaBridge() {
             variant="outline"
             size="sm"
             className="flex h-auto items-start justify-start gap-2 p-2 text-left"
-            disabled={adding === mf.id || (!!adding && adding !== mf.id)}
+            disabled={!!adding}
             onClick={() => handleAdd(mf)}
           >
             {adding === mf.id ? (

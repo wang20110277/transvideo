@@ -913,6 +913,14 @@ ipcMain.handle('read-image-base64', async (_event, localPath: string) => {
       '.jpeg': 'image/jpeg',
       '.gif': 'image/gif',
       '.webp': 'image/webp',
+      // 视频/音频：AI 生成视频以 local-image://videos/*.mp4 入库（media-store），
+      // 原表只映射图片扩展名，mp4 会 fallback 成 image/png 污染 data URL 内嵌 mime
+      '.mp4': 'video/mp4',
+      '.webm': 'video/webm',
+      '.mov': 'video/quicktime',
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.m4a': 'audio/mp4',
     }
     const mimeType = mimeTypes[ext] || 'image/png'
     const base64 = `data:${mimeType};base64,${data.toString('base64')}`

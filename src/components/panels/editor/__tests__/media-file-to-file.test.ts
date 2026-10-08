@@ -28,12 +28,45 @@ describe("mediaFileToFile", () => {
     expect(out!.type).toBe("video/mp4");
   });
 
-  it("local-image:// 走 imageStorage.readAsBase64", async () => {
+  it("local-image:// 走 imageStorage.readAsBase64（真实形状：base64 为 data URL，剥前缀解码）", async () => {
+    const bytes = new Uint8Array([104, 105]); // "hi"
+    const base64 = Buffer.from(bytes).toString("base64");
+    vi.stubGlobal("window", {
+      imageStorage: {
+        // electron/main.ts read-image-base64 返回 data:${mime};base64,<payload>；不给 mimeType 字段，
+        // 逼 mime 取自 data URL 内嵌值（优先级第一档）
+        readAsBase64: vi.fn(async () => ({
+          success: true,
+          base64: `data:video/mp4;base64,${base64}`,
+        })),
+      },
+    });
+    const out = await mediaFileToFile(mk({ url: "local-image://videos/abc.mp4" }));
+    expect(out).toBeInstanceOf(File);
+    expect(out!.type).toBe("video/mp4");
+    expect(await out!.text()).toBe("hi");
+  });
+
+  it("local-image:// 裸 base64（无 data: 前缀）兼容，mime 用 res.mimeType", async () => {
     const bytes = new Uint8Array([104, 105]); // "hi"
     const base64 = Buffer.from(bytes).toString("base64");
     vi.stubGlobal("window", {
       imageStorage: {
         readAsBase64: vi.fn(async () => ({ success: true, base64, mimeType: "video/mp4" })),
+      },
+    });
+    const out = await mediaFileToFile(mk({ url: "local-image://videos/abc.mp4" }));
+    expect(out).toBeInstanceOf(File);
+    expect(out!.type).toBe("video/mp4");
+    expect(await out!.text()).toBe("hi");
+  });
+
+  it("local-image:// 无任何 mime 信息时按素材类型推断（video→video/mp4）", async () => {
+    const bytes = new Uint8Array([104, 105]); // "hi"
+    const base64 = Buffer.from(bytes).toString("base64");
+    vi.stubGlobal("window", {
+      imageStorage: {
+        readAsBase64: vi.fn(async () => ({ success: true, base64 })),
       },
     });
     const out = await mediaFileToFile(mk({ url: "local-image://videos/abc.mp4" }));

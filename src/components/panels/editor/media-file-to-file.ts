@@ -38,8 +38,13 @@ export async function mediaFileToFile(mf: MediaFile): Promise<File | null> {
     if (!storage) return null;
     const res = await storage.readAsBase64(url);
     if (!res?.success || !res?.base64) return null;
-    const mime = res.mimeType || guessMime(mf.type);
-    const bin = atob(res.base64);
+    // main 进程返回的 base64 实为完整 data URL（data:<mime>;base64,<payload>）——剥前缀取裸载荷，
+    // 否则 atob 撞 `:` `;` `,` 必抛 InvalidCharacterError；裸 base64（无前缀）时 replace 为 no-op，天然兼容
+    const payload = res.base64.replace(/^data:[^,]*,/, "");
+    // mimeType 优先级：data URL 内嵌 mime > res.mimeType > 按素材类型推断（video→video/mp4）
+    const mime =
+      /^data:([^;,]+)/.exec(res.base64)?.[1] || res.mimeType || guessMime(mf.type);
+    const bin = atob(payload);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new File([bytes], name, { type: mime });
