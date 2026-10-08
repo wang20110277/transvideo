@@ -48,7 +48,7 @@ import {
 import { useElementSelection } from "@editor/hooks/timeline/element/use-element-selection";
 import { resolveStickerId } from "@editor/lib/stickers";
 import { buildGraphicPreviewUrl } from "@editor/lib/graphics";
-import Image from "next/image";
+import Image from "@editor/shims/image";
 import {
 	ScissorIcon,
 	Delete02Icon,

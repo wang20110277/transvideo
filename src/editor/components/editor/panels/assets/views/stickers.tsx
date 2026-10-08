@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import Image from "@editor/shims/image";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";

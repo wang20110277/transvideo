@@ -1,154 +1,20 @@
-import { useEffect } from "react";
-import { useSoundsStore } from "@editor/stores/sounds-store";
+// 在线音效搜索依赖 OpenCut 的 /api/sounds/search（未迁移）。
+// transvideo 版仅保留本地收藏功能，搜索返回空结果。
+import type { SoundEffect } from "@editor/lib/sounds/types";
 
-export function useSoundSearch({
-	query,
-	commercialOnly,
-}: {
+export function useSoundSearch(_params: {
 	query: string;
 	commercialOnly: boolean;
 }) {
-	const {
-		searchResults,
-		isSearching,
-		searchError,
-		lastSearchQuery,
-		currentPage,
-		hasNextPage,
-		isLoadingMore,
-		totalCount,
-		setSearchResults,
-		setSearching,
-		setSearchError,
-		setLastSearchQuery,
-		setCurrentPage,
-		setHasNextPage,
-		setTotalCount,
-		setLoadingMore,
-		appendSearchResults,
-		appendTopSounds,
-		resetPagination,
-	} = useSoundsStore();
-
-	const loadMore = async () => {
-		if (isLoadingMore || !hasNextPage) return;
-
-		try {
-			setLoadingMore({ loading: true });
-			const nextPage = currentPage + 1;
-
-			const searchParams = new URLSearchParams({
-				page: nextPage.toString(),
-				type: "effects",
-			});
-
-			if (query.trim()) {
-				searchParams.set("q", query);
-			}
-
-			searchParams.set("commercial_only", commercialOnly.toString());
-			const response = await fetch(
-				`/api/sounds/search?${searchParams.toString()}`,
-			);
-
-			if (response.ok) {
-				const data = await response.json();
-
-				if (query.trim()) {
-					appendSearchResults(data.results);
-				} else {
-					appendTopSounds(data.results);
-				}
-
-				setCurrentPage({ page: nextPage });
-				setHasNextPage({ hasNext: !!data.next });
-				setTotalCount(data.count);
-			} else {
-				setSearchError({ error: `Load more failed: ${response.status}` });
-			}
-		} catch (err) {
-			setSearchError({
-				error: err instanceof Error ? err.message : "Load more failed",
-			});
-		} finally {
-			setLoadingMore({ loading: false });
-		}
-	};
-
-	useEffect(() => {
-		if (!query.trim()) {
-			setSearchResults({ results: [] });
-			setSearchError({ error: null });
-			setLastSearchQuery({ query: "" });
-			return;
-		}
-
-		if (query === lastSearchQuery && searchResults.length > 0) {
-			return;
-		}
-
-		let ignore = false;
-
-		const timeoutId = setTimeout(async () => {
-			try {
-				setSearching({ searching: true });
-				setSearchError({ error: null });
-				resetPagination();
-
-				const response = await fetch(
-					`/api/sounds/search?q=${encodeURIComponent(query)}&type=effects&page=1`,
-				);
-
-				if (!ignore) {
-					if (response.ok) {
-						const data = await response.json();
-						setSearchResults({ results: data.results });
-						setLastSearchQuery({ query: query });
-						setHasNextPage({ hasNext: !!data.next });
-						setTotalCount({ count: data.count });
-						setCurrentPage({ page: 1 });
-					} else {
-						setSearchError({ error: `Search failed: ${response.status}` });
-					}
-				}
-			} catch (err) {
-				if (!ignore) {
-					setSearchError({
-						error: err instanceof Error ? err.message : "Search failed",
-					});
-				}
-			} finally {
-				if (!ignore) {
-					setSearching({ searching: false });
-				}
-			}
-		}, 300);
-
-		return () => {
-			clearTimeout(timeoutId);
-			ignore = true;
-		};
-	}, [
-		query,
-		lastSearchQuery,
-		searchResults.length,
-		setSearchResults,
-		setSearching,
-		setSearchError,
-		setLastSearchQuery,
-		setCurrentPage,
-		setHasNextPage,
-		setTotalCount,
-		resetPagination,
-	]);
+	const loadMore = async () => {};
 
 	return {
-		results: searchResults,
-		isLoading: isSearching,
-		error: searchError,
+		results: [] as SoundEffect[],
+		isLoading: false,
+		error: null as string | null,
 		loadMore,
-		hasNextPage,
-		isLoadingMore,
-		totalCount,
+		hasNextPage: false,
+		isLoadingMore: false,
+		totalCount: 0,
 	};
 }

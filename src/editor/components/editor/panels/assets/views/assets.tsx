@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import Image from "@editor/shims/image";
 import { useMemo, useState } from "react";
 import { PanelView } from "@editor/components/editor/panels/assets/views/base-panel";
 import { MediaDragOverlay } from "@editor/components/editor/panels/assets/drag-overlay";

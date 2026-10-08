@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@editor/shims/link";
 import { Button } from "../ui/button";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@editor/shims/navigation";
 
 const STORAGE_KEY = "mobile-acknowledged";
 

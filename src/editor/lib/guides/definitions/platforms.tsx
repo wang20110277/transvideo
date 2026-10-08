@@ -1,4 +1,4 @@
-import Image from "next/image";
+import Image from "@editor/shims/image";
 import type { GuideDefinition } from "@editor/lib/guides/types";
 import { TikTokLayout } from "./tiktok-layout";
 

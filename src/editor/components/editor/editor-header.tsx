@@ -9,10 +9,10 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import Link from "next/link";
+import Link from "@editor/shims/link";
 import { RenameProjectDialog } from "./dialogs/rename-project-dialog";
 import { DeleteProjectDialog } from "./dialogs/delete-project-dialog";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@editor/shims/navigation";
 import { FaDiscord } from "react-icons/fa6";
 import { ExportButton } from "./export-button";
 import { ThemeToggle } from "../theme-toggle";
@@ -22,7 +22,7 @@ import { useEditor } from "@editor/hooks/use-editor";
 import { CommandIcon, Logout05Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShortcutsDialog } from "./dialogs/shortcuts-dialog";
-import Image from "next/image";
+import Image from "@editor/shims/image";
 import { cn } from "@editor/utils/ui";
 
 export function EditorHeader() {

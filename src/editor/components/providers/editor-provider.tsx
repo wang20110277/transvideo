@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@editor/shims/navigation";
 import { Loader2 } from "lucide-react";
 import { EditorCore } from "@editor/core";
 import { useEditor } from "@editor/hooks/use-editor";
