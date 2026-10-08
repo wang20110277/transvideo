@@ -17,6 +17,8 @@ interface ImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
 
 /** next/image 替身：fill 模式铺满定位容器，其余按原生 img 透传 */
 export function Image({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- next/image 专属选项，原生 img 不认识，显式剔除避免泄漏到 DOM（React non-boolean attribute 告警）
+  unoptimized, priority, quality, placeholder,
   src, alt, width, height, fill, sizes, style, onLoad, ...rest
 }: ImageProps) {
   const fillStyle: CSSProperties | undefined = fill
