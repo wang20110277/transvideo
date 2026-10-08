@@ -2,3 +2,4 @@ This product includes source code from OpenCut (https://github.com/opencut-app/o
 Copyright (c) OpenCut contributors, licensed under the MIT License.
 The vendored copy lives in src/editor/ (extracted from the opencut-classic codebase).
 MIT License text: https://github.com/opencut-app/opencut/blob/main/LICENSE
+Full MIT license text: see LICENSE-OpenCut in this repository.

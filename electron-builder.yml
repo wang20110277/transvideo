@@ -11,6 +11,10 @@ files:
   - "!node_modules/@next/**"
   - "!node_modules/sharp/**"
   - "!node_modules/@img/**"
+  # renderer 转写 worker 静态 import transformers，Vite 已把 onnxruntime-web 打进 chunk；
+  # node_modules 内的 onnxruntime 系是打包死重量（+30-60MB/平台），且 asarUnpack **/*.node 会额外解包其原生件
+  - "!node_modules/onnxruntime-*/**"
+  - "!node_modules/@huggingface/**"
 
 extraResources:
   - from: demo-data

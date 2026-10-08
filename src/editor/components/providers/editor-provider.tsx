@@ -75,7 +75,7 @@ export function EditorProvider({ projectId, children }: EditorProviderProps) {
 
 	if (error) {
 		return (
-			<div className="bg-background flex h-screen w-screen items-center justify-center">
+			<div className="bg-background flex h-full w-full items-center justify-center">
 				<div className="flex flex-col items-center gap-4">
 					<p className="text-destructive text-sm">{error}</p>
 				</div>
@@ -85,7 +85,7 @@ export function EditorProvider({ projectId, children }: EditorProviderProps) {
 
 	if (isLoading) {
 		return (
-			<div className="bg-background flex h-screen w-screen items-center justify-center">
+			<div className="bg-background flex h-full w-full items-center justify-center">
 				<div className="flex flex-col items-center gap-4">
 					<Loader2 className="text-muted-foreground size-8 animate-spin" />
 					<p className="text-muted-foreground text-sm">正在加载项目…</p>
@@ -96,7 +96,7 @@ export function EditorProvider({ projectId, children }: EditorProviderProps) {
 
 	if (!activeProject) {
 		return (
-			<div className="bg-background flex h-screen w-screen items-center justify-center">
+			<div className="bg-background flex h-full w-full items-center justify-center">
 				<div className="flex flex-col items-center gap-4">
 					<Loader2 className="text-muted-foreground size-8 animate-spin" />
 					<p className="text-muted-foreground text-sm">正在退出项目…</p>

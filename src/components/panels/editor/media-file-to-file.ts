@@ -8,8 +8,12 @@ type ImageStorageBridge = {
     success: boolean;
     base64?: string;
     mimeType?: string;
+    size?: number;
   } | null>;
 };
+
+/** local-image://（base64-over-IPC，内存峰值 ~3-4× 文件大小）的大小上限 */
+export const LOCAL_IMAGE_MAX_BYTES = 200 * 1024 * 1024;
 
 function guessMime(type: MediaFile["type"]): string {
   if (type === "image") return "image/png";
@@ -22,8 +26,11 @@ function safeExt(name: string): string {
   return m ? `.${m[1].toLowerCase()}` : "";
 }
 
-/** transvideo MediaFile → 编辑器可用的 File；失败返回 null */
-export async function mediaFileToFile(mf: MediaFile): Promise<File | null> {
+/** transvideo MediaFile → 编辑器可用的 File；失败返回 null；超限返回 null 并触发 onTooLarge */
+export async function mediaFileToFile(
+  mf: MediaFile,
+  opts?: { onTooLarge?: () => void },
+): Promise<File | null> {
   if (mf.file instanceof File) return mf.file;
   const url = mf.url;
   if (!url) return null;
@@ -38,6 +45,12 @@ export async function mediaFileToFile(mf: MediaFile): Promise<File | null> {
     if (!storage) return null;
     const res = await storage.readAsBase64(url);
     if (!res?.success || !res?.base64) return null;
+    // 大文件防线：base64-over-IPC 内存峰值 ~3-4× 文件大小，超 200MB 拒转；
+    // size 缺失（旧版 preload 无此字段）时放行，向后兼容
+    if (typeof res.size === "number" && res.size > LOCAL_IMAGE_MAX_BYTES) {
+      opts?.onTooLarge?.();
+      return null;
+    }
     // main 进程返回的 base64 实为完整 data URL（data:<mime>;base64,<payload>）——剥前缀取裸载荷，
     // 否则 atob 撞 `:` `;` `,` 必抛 InvalidCharacterError；裸 base64（无前缀）时 replace 为 no-op，天然兼容
     const payload = res.base64.replace(/^data:[^,]*,/, "");

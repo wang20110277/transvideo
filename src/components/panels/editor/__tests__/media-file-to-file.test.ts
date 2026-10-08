@@ -85,4 +85,22 @@ describe("mediaFileToFile", () => {
     });
     expect(await mediaFileToFile(mk({ url: "local-image://x" }))).toBeNull();
   });
+
+  it("local-image:// size 超 200MB 上限返回 null 并触发 onTooLarge", async () => {
+    const onTooLarge = vi.fn();
+    vi.stubGlobal("window", {
+      imageStorage: {
+        readAsBase64: vi.fn(async () => ({
+          success: true,
+          base64: "aGk=", // "hi"
+          size: 250 * 1024 * 1024,
+        })),
+      },
+    });
+    const out = await mediaFileToFile(mk({ url: "local-image://videos/big.mp4" }), {
+      onTooLarge,
+    });
+    expect(out).toBeNull();
+    expect(onTooLarge).toHaveBeenCalledTimes(1);
+  });
 });

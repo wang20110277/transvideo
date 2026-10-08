@@ -24,9 +24,15 @@ export function TransvideoMediaBridge() {
     if (!projectId || adding) return;
     setAdding(mf.id);
     try {
-      const file = await mediaFileToFile(mf);
+      let tooLarge = false;
+      const file = await mediaFileToFile(mf, {
+        onTooLarge: () => {
+          tooLarge = true;
+          toast.error("素材过大（>200MB），请使用导入按钮直接导入文件");
+        },
+      });
       if (!file) {
-        toast.error(`无法读取素材「${mf.name}」`);
+        if (!tooLarge) toast.error(`无法读取素材「${mf.name}」`);
         return;
       }
       const { EditorCore } = await import("@editor/core");
