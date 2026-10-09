@@ -20,7 +20,11 @@
       "@editor/*": ["./src/editor/*"],
       "@opencut/ai-core": ["./src/packages/ai-core/index.ts"],
       "@opencut/ai-core/*": ["./src/packages/ai-core/*"],
-      "@smartsub/bridge": ["./electron/services/smartsub/bridge/index.d.ts"]
+      "@smartsub/bridge": ["./electron/services/smartsub/bridge/index.d.ts"],
+      // 渲染层 type-only 导入经 @smartsub/* 直达移植树文件(树本体仍由
+      // electron/services/smartsub/tsconfig.json 单独编译;exact 条目
+      // @smartsub/bridge 优先级高于通配,类型门面不受影响)
+      "@smartsub/*": ["./electron/services/smartsub/*"]
     },
 
     /* Linting */

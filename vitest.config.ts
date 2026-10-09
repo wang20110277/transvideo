@@ -14,6 +14,8 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
       // 与 tsconfig.json paths 对齐：随迁编辑器测试经 @editor/* 导入
       "@editor": path.resolve(__dirname, "./src/editor"),
+      // SmartSub 移植树类型(type-only)导入解析,与根 tsconfig @smartsub/* 对齐
+      "@smartsub": path.resolve(__dirname, "./electron/services/smartsub"),
     },
   },
 });

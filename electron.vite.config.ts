@@ -138,6 +138,9 @@ export default defineConfig({
       alias: {
         '@': path.resolve(__dirname, './src'),
         '@editor': path.resolve(__dirname, './src/editor'),
+        // SmartSub 移植树类型(type-only)导入解析;renderer 段独立于 main 段
+        // 的 '@smartsub/bridge' 实体别名,二者无冲突
+        '@smartsub': path.resolve(__dirname, './electron/services/smartsub'),
         '@opencut/ai-core/services/prompt-compiler': path.resolve(__dirname, './src/packages/ai-core/services/prompt-compiler.ts'),
         '@opencut/ai-core/api/task-poller': path.resolve(__dirname, './src/packages/ai-core/api/task-poller.ts'),
         '@opencut/ai-core/protocol': path.resolve(__dirname, './src/packages/ai-core/protocol/index.ts'),
