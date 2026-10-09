@@ -75,10 +75,54 @@ function apiCorsProxyPlugin(): Plugin {
   };
 }
 
+/**
+ * Vite 插件:SmartSub 树内相对路径惰性 require 打包修复
+ *
+ * 树内(modelCatalog/downloadConfig/voiceClone 等)为让纯函数可在非 Electron
+ * 环境(单测)引用,大量使用 `const { store } = require('./store') as ...` 式
+ * 惰性 require(树文件按文件落盘时相对路径运行时可解析)。宿主主进程是单文件
+ * bundle(rollup 无法静态分析字符串 require),运行时 `require('./store')` 相对
+ * out/main/index.cjs 解析 → Cannot find module。getSystemInfo 等通道首次触达
+ * 即崩(Task 12 冒烟实测)。
+ *
+ * 修复:把 smartsub 树内的相对 require 表达式改写为顶部提升的静态
+ * `import * as ns from '<spec>'`(bundle 内该模块本就在依赖图里,主进程加载期
+ * electron 已可用,提升为饿加载无副作用;非相对说明符——electron/node 内建/
+ * external 依赖——不经此插件,保持运行时 require)。
+ */
+function smartsubLazyRelativeRequirePlugin(): Plugin {
+  const treeRoot = path.resolve(__dirname, 'electron/services/smartsub');
+  return {
+    name: 'smartsub-lazy-relative-require',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.startsWith(treeRoot) || !id.endsWith('.ts')) return null;
+      if (!code.includes("require('./") && !code.includes("require('../")) return null;
+      const specRe = /require\((['"])(\.\.?\/[^'"]+)\1\)/g;
+      const bindings = new Map<string, string>();
+      let counter = 0;
+      const rewritten = code.replace(specRe, (_match, _quote: string, spec: string) => {
+        let binding = bindings.get(spec);
+        if (!binding) {
+          binding = `__smartsubLazyRequire${counter += 1}`;
+          bindings.set(spec, binding);
+        }
+        return binding;
+      });
+      if (bindings.size === 0) return null;
+      const hoisted = [...bindings.entries()]
+        .map(([spec, binding]) => `import * as ${binding} from '${spec}';`)
+        .join('\n');
+      return `${hoisted}\n${rewritten}`;
+    },
+  };
+}
+
 export default defineConfig({
   main: {
     // '@smartsub/bridge' 类型侧由根 tsconfig paths 指向 declaration-only 门面
     // (防止根程序 import 追入整棵 smartsub 树),打包侧在此指回真实实现。
+    plugins: [smartsubLazyRelativeRequirePlugin()],
     resolve: {
       alias: {
         '@smartsub/bridge': path.resolve(__dirname, 'electron/services/smartsub/bridge/index.ts'),

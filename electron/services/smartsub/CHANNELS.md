@@ -2,7 +2,10 @@
 
 | 通道 | 方向 | 注册处 |
 |---|---|---|
+| `active-backend-changed` | push | helpers/ipcAddonHandlers.ts |
 | `addLog` | invoke | helpers/ipcStoreHandlers.ts |
+| `addon-download-progress` | push | helpers/addonDownloader.ts |
+| `addon-fallback` | push | helpers/ipcAddonHandlers.ts |
 | `cancel-addon-download` | invoke | helpers/ipcAddonHandlers.ts |
 | `cancel-py-engine-download` | invoke | helpers/ipcEngineHandlers.ts |
 | `cancelModelDownload` | invoke | helpers/systemInfoManager.ts |
@@ -45,6 +48,7 @@
 | `downloadFunasrModel` | invoke | helpers/systemInfoManager.ts |
 | `downloadModel` | invoke | helpers/systemInfoManager.ts |
 | `downloadParakeetModel` | invoke | helpers/systemInfoManager.ts |
+| `downloadProgress` | push | helpers/fasterWhisperModelDownloader.ts |
 | `downloadQwenModel` | invoke | helpers/systemInfoManager.ts |
 | `downloadSpeakerDiarizationModel` | invoke | helpers/systemInfoManager.ts |
 | `downloadTtsModel` | invoke | helpers/systemInfoManager.ts |
@@ -56,6 +60,7 @@
 | `dubbing:missingSessions` | invoke | helpers/ipcDubbingHandlers.ts |
 | `dubbing:pickFile` | invoke | helpers/ipcDubbingHandlers.ts |
 | `dubbing:previewVoice` | invoke | helpers/ipcDubbingHandlers.ts |
+| `dubbing:sessionsDeleted` | push | helpers/ipcDubbingHandlers.ts |
 | `exportConfig` | invoke | helpers/ipcStoreHandlers.ts |
 | `get-active-backend` | invoke | helpers/ipcAddonHandlers.ts |
 | `get-addon-config` | invoke | helpers/ipcAddonHandlers.ts |
@@ -117,6 +122,8 @@
 | `listTtsVoices` | invoke | helpers/ipcStoreHandlers.ts |
 | `manuscript:select` | invoke | helpers/ipcHandlers.ts |
 | `message` | send | helpers/ipcHandlers.ts |
+| `modelDownloadDetail` | push | helpers/fasterWhisperModelDownloader.ts |
+| `newLog` | push | helpers/logger.ts |
 | `openDialog` | send | helpers/ipcHandlers.ts |
 | `openDirectoryPath` | invoke | helpers/systemInfoManager.ts |
 | `openModelsFolder` | invoke | helpers/systemInfoManager.ts |
@@ -126,6 +133,8 @@
 | `pauseTask` | send | helpers/taskProcessor.ts |
 | `pipeline:releaseGate` | invoke | helpers/ipcPipelineHandlers.ts |
 | `proxy:test` | invoke | helpers/ipcNetworkHandlers.ts |
+| `py-engine-download-progress` | push | helpers/pythonRuntime/downloader.ts |
+| `py-engine-update-available` | push | helpers/pythonRuntime/autoUpdateCheck.ts |
 | `python-engine:ping` | invoke | helpers/ipcEngineHandlers.ts |
 | `readProofreadDataFile` | invoke | helpers/ipcHandlers.ts |
 | `readRawFileContent` | invoke | helpers/ipcHandlers.ts |
@@ -186,6 +195,7 @@
 | `subtitleMerge:selectOutputPath` | invoke | helpers/ipcSubtitleMergeHandlers.ts |
 | `subtitleMerge:setPreferences` | invoke | helpers/ipcSubtitleMergeHandlers.ts |
 | `subtitleMerge:startMerge` | invoke | helpers/ipcSubtitleMergeHandlers.ts |
+| `taskFileChange` | push | helpers/ipcPipelineHandlers.ts |
 | `testAsrProvider` | invoke | helpers/ipcStoreHandlers.ts |
 | `testTranslation` | invoke | helpers/systemInfoManager.ts |
 | `testTtsProvider` | invoke | helpers/ipcStoreHandlers.ts |
