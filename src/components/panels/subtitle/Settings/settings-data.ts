@@ -156,9 +156,8 @@ const BATCH_FIELDS: ProviderFieldSpec[] = [
 
 /**
  * v1 翻译服务商表单开放字段(镜像自树内 PROVIDER_TYPES 对应条目的凭据/端点/批量
- * 参数;提示词等长文本与结构化输出开关不开放,保存时原样透传)。
- * 注:白名单含 'gemini'/'openai',但树内内置实例 id 实为 'Gemini',openai 仅是
- * 自定义实例模板(见任务报告疑虑)——两者当前匹配不到内置实例,规格仍备好。
+ * 参数;提示词等长文本与结构化输出开关不开放,保存时原样透传)。键 = 白名单 id
+ * (已对齐树内内置实例大小写,'Gemini');openai 无内置实例,不在表内。
  */
 export const TRANSLATION_FIELD_SPECS: Record<string, ProviderFieldSpec[]> = {
   bingFree: [{ key: "windowMaxRequests", label: "窗口请求上限(0=不限)", type: "number", step: 1 }, ...BATCH_FIELDS],
@@ -169,7 +168,7 @@ export const TRANSLATION_FIELD_SPECS: Record<string, ProviderFieldSpec[]> = {
     { key: "modelName", label: "模型名", type: "text", placeholder: "deepseek-chat" },
     ...BATCH_FIELDS,
   ],
-  gemini: [
+  Gemini: [
     { key: "apiUrl", label: "Base URL", type: "text", placeholder: "https://generativelanguage.googleapis.com/v1beta/openai/" },
     { key: "apiKey", label: "API Key", type: "password" },
     { key: "modelName", label: "模型名", type: "text", placeholder: "gemini-2.0-flash" },
@@ -184,12 +183,6 @@ export const TRANSLATION_FIELD_SPECS: Record<string, ProviderFieldSpec[]> = {
   ollama: [
     { key: "apiUrl", label: "API URL", type: "text", placeholder: "http://localhost:11434/api/chat" },
     { key: "modelName", label: "模型名", type: "text", placeholder: "qwen2.5:7b" },
-    ...BATCH_FIELDS,
-  ],
-  openai: [
-    { key: "apiUrl", label: "Base URL", type: "text", placeholder: "https://api.openai.com/v1" },
-    { key: "apiKey", label: "API Key", type: "password" },
-    { key: "modelName", label: "模型名", type: "text", placeholder: "gpt-4o-mini" },
     ...BATCH_FIELDS,
   ],
 };

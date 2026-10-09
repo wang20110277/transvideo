@@ -409,7 +409,9 @@ export function ProviderSettings() {
       <section className="flex flex-col gap-3">
         <header className="flex items-center gap-2">
           <h3 className="text-sm font-semibold">翻译服务商</h3>
-          <span className="text-xs text-muted-foreground">仅显示 v1 开放白名单内的服务商</span>
+          <span className="text-xs text-muted-foreground">
+            仅显示 v1 开放白名单内的服务商;自定义 OpenAI 兼容端点(模板实例)v1 暂未开放
+          </span>
         </header>
         {translationAll === null && !loadFailed && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

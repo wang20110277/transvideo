@@ -1,12 +1,16 @@
 import Store from 'electron-store';
 import { StoreType } from './types';
 import { defaultUserConfig, isAppleSilicon } from '../utils';
+import { smartsubUserData } from '../smartsubPaths';
 
 const defaultWhisperCommand = isAppleSilicon()
   ? 'whisper "${audioFile}" --model ${whisperModel} --output_format srt --output_dir "${outputDir}" --language ${sourceLanguage}'
   : 'whisper "${audioFile}" --model ${whisperModel} --device cuda --output_format srt --output_dir "${outputDir}" --language ${sourceLanguage}';
 
 export const store = new Store<StoreType>({
+  // 宿主适配(spec §2 强制):配置落 userData/smartsub/config.json,与宿主
+  // userData 根隔离(上游默认落 userData 根 config.json);见移植 README 偏差 11。
+  cwd: smartsubUserData(),
   defaults: {
     userConfig: defaultUserConfig,
     translationProviders: [],

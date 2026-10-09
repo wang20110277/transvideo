@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -216,7 +216,33 @@ function assertSmartsubResources(buildOutputDir, arch) {
     console.error('[smartsub] 打包断言失败,缺失:\n' + missing.join('\n'));
     process.exit(1);
   }
+  assertSmartsubMainBundle();
   console.log(`[smartsub] 打包断言通过 (${buildTarget}-${arch}, ${unpackedAppDir})`);
+}
+
+/**
+ * SmartSub 主进程 bundle 守卫:单文件 bundle 内不允许残留相对路径惰性 require。
+ * 树内 `require('./store')` 式惰性引用(为纯函数单测而设)在 rollup 单文件产物里
+ * 运行时相对 out/main/index.cjs 解析 → Cannot find module(Task 12 真机实测
+ * getSystemInfo 首调即崩);electron.vite.config.ts 的
+ * smartsubLazyRelativeRequirePlugin 负责改写为提升 import,此处断言防止上游
+ * 同步引入新的惰性 require 变体静默漏改。
+ */
+function assertSmartsubMainBundle() {
+  const mainBundle = resolve(projectRoot, 'out', 'main', 'index.cjs');
+  if (!existsSync(mainBundle)) {
+    console.error(`[smartsub] 打包断言失败:找不到主进程 bundle ${mainBundle}(先跑 electron-vite build)`);
+    process.exit(1);
+  }
+  const source = readFileSync(mainBundle, 'utf8');
+  const offenders = source.match(/require\(\s*['"]\.\.?\/[^'"]*['"]\s*\)/g) || [];
+  if (offenders.length > 0) {
+    console.error(
+      `[smartsub] 打包断言失败:主进程 bundle 残留 ${offenders.length} 处相对惰性 require(应已被 smartsubLazyRelativeRequirePlugin 改写):\n` +
+        offenders.slice(0, 5).join('\n'),
+    );
+    process.exit(1);
+  }
 }
 
 function buildForArch(arch) {

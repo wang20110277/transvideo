@@ -35,5 +35,8 @@
      桥以 BrowserWindow.fromWebContents(event.sender) 取发起 smartsub:init 的宿主窗口代入;
      退出守卫运行中任务判定用 workItemStore.getWorkItems() 的 status∈{waiting,running}
      (树内无 getTaskProjects 导出;WorkItemStatus 六态见 types/workItem.ts)
+  11. helpers/store/index.ts electron-store 实例化加 cwd: smartsubUserData()(spec §2
+     强制要求的存储位置适配):配置落 userData/smartsub/config.json,与宿主 userData 根
+     隔离(上游默认落 userData 根 config.json);configExporter 等均经同一实例,路径随之
 - 上游同步: diff 上游 main/ 对应模块 → 挑拣合入;合入后重跑
   npm test 与冒烟;bridge/ 不在上游,勿被 diff 带走
