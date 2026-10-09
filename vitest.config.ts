@@ -4,9 +4,10 @@ import path from "path";
 export default defineConfig({
   test: {
     environment: "node",
-    // smartsub 移植树内的 *.test.ts 为上游 jest 用例(jest.mock / @jest-environment),
-    // 本仓库测试运行时为 vitest,不纳入收集;tsconfig 侧同样排除(见 electron/services/smartsub/tsconfig.json)
-    exclude: [...configDefaults.exclude, "electron/services/smartsub/**"],
+    // smartsub 移植树内 service/ 的 *.test.ts 为上游 jest 用例(jest.mock / @jest-environment),
+    // 本仓库测试运行时为 vitest,不纳入收集;tsconfig 侧同样排除(见 electron/services/smartsub/tsconfig.json)。
+    // bridge/__tests__ 为本仓库 vitest 用例,保持在收集范围内
+    exclude: [...configDefaults.exclude, "electron/services/smartsub/service/**"],
   },
   resolve: {
     alias: {
