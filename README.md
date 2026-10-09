@@ -99,6 +99,11 @@
 - API Key 轮询负载均衡
 - 任务队列管理，自动重试
 
+### 📝 字幕板块（Phase 1）
+- 本地/素材视频 → 转写（whisper.cpp）→ 翻译（免费源 + 大模型）→ 双语字幕 → 烧录成片
+- 模型与服务商在板块内设置页管理；数据隔离于 `userData/smartsub/`
+- 基于 SmartSub（MIT）移植，详见 NOTICE 与 `electron/services/smartsub/README.md`
+
 
 ## 快速开始
 

@@ -86,6 +86,11 @@ Each stage's output automatically flows into the next — no manual glue require
 - API key rotation with load balancing
 - Task queue management with automatic retry
 
+### 📝 Subtitle Module (Phase 1)
+- Local / library videos → transcription (whisper.cpp) → translation (free sources + LLM) → bilingual subtitles → burned-in output
+- Models & providers managed in the module's settings page; data isolated under `userData/smartsub/`
+- Ported from SmartSub (MIT); see NOTICE and `electron/services/smartsub/README.md`
+
 ## Quick Start
 
 ### Requirements
