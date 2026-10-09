@@ -85,6 +85,13 @@ export default defineConfig({
       },
     },
     build: {
+      // electron-vite v5 默认 externalizeDeps=true:把 package.json 全部 dependencies
+      // 运行时 require 化。但 https-proxy-agent / http-proxy-agent v9 是纯 ESM 包,
+      // CJS 主进程产物运行时 require 会 ERR_REQUIRE_ESM(Phase 0 冒烟实测)。原生
+      // SmartSub 在 nextron.config.js 做了同样处理:把这两包从外部化排除、打进
+      // bundle(传递依赖 agent-base / proxy-agent-negotiate 一并打入)。其可选动态
+      // import 的 kerberos(Kerberos 代理鉴权才用,永不启用)在 external 里保持懒加载。
+      externalizeDeps: { exclude: ['https-proxy-agent', 'http-proxy-agent'] },
       rollupOptions: {
         input: {
           index: path.resolve(__dirname, 'electron/main.ts')
@@ -95,11 +102,13 @@ export default defineConfig({
         external: [
           'ffmpeg-static', 'fluent-ffmpeg', 'axios', 'fs-extra', 'lodash', 'uuid',
           'iconv-lite', 'opencc-js', 'srt-webvtt', 'tinyld', 'fontkit', 'decompress',
-          'msedge-tts', 'openai', 'zod', 'electron-store', 'https-proxy-agent',
-          'http-proxy-agent', 'systeminformation', 'jsonrepair', 'diff',
+          'msedge-tts', 'openai', 'zod', 'electron-store',
+          'systeminformation', 'jsonrepair', 'diff',
           // Task 3 补装(496c816)的翻译服务运行时依赖,同样运行时 require、不进 bundle
           '@alicloud/alimt20181012', '@alicloud/openapi-client', '@alicloud/tea-util',
           '@volcengine/openapi', 'really-relaxed-json',
+          // 仅 proxy-agent-negotiate 的可选动态 import 触达,未安装,永不执行
+          'kerberos',
         ]
       }
     }
