@@ -21,6 +21,19 @@
   7. 编译隔离:根 tsconfig exclude 本树;本树 tsconfig.json 对齐上游 main 进程编译语义
      (strict:false、ES2022、esModuleInterop、无 lib.dom——主进程 fetch 走 Node/undici 类型,
      host-fetch-types.d.ts 补全局 BodyInit 别名);service/__tests__(jest 用例)不参与编译与 vitest 收集
-  8. (Task 4/5 追加 bridge 相关条目)
+  8. bridge/(Task 4 新增,不在上游):装配桥 index.ts 暴露 initSmartSubBridge() 与
+     smartsubQuitGuard(),新增 IPC 通道 smartsub:init(懒装配,幂等)与
+     smartsub:reveal-path(资源定位);宿主接线点 electron/main.ts 两处——whenReady 体内
+     initSmartSubBridge()、顶层 before-quit 退出守卫(preventDefault → 守卫放行后 app.exit(0))
+  9. 类型接缝(Task 4):根 tsconfig 若经 import 追入 index.ts 会把整树带进 strict 程序
+     (exclude 只挡 include 根)。故根 tsconfig paths 将 '@smartsub/bridge' 解析到
+     bridge/index.d.ts(declaration-only 门面,签名须与 index.ts 同步),electron-vite
+     main 段 resolve.alias 将同一说明符解析回 index.ts 实现实体;main.ts 以
+     '@smartsub/bridge' 导入。上游同步时若 bridge 导出签名变化,两处需同步改
+  10. 签名适配(Task 4,宿主调用侧):树内 8 个 setup*(systemInfoManager/taskProcessor/
+     glossary/subtitleMerge/pipeline/dubbing/voiceClone/ipcHandlers)必填 mainWindow,
+     桥以 BrowserWindow.fromWebContents(event.sender) 取发起 smartsub:init 的宿主窗口代入;
+     退出守卫运行中任务判定用 workItemStore.getWorkItems() 的 status∈{waiting,running}
+     (树内无 getTaskProjects 导出;WorkItemStatus 六态见 types/workItem.ts)
 - 上游同步: diff 上游 main/ 对应模块 → 挑拣合入;合入后重跑
   npm test 与冒烟;bridge/ 不在上游,勿被 diff 带走

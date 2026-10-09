@@ -19,7 +19,8 @@
       "@/*": ["./src/*"],
       "@editor/*": ["./src/editor/*"],
       "@opencut/ai-core": ["./src/packages/ai-core/index.ts"],
-      "@opencut/ai-core/*": ["./src/packages/ai-core/*"]
+      "@opencut/ai-core/*": ["./src/packages/ai-core/*"],
+      "@smartsub/bridge": ["./electron/services/smartsub/bridge/index.d.ts"]
     },
 
     /* Linting */

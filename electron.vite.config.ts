@@ -77,6 +77,13 @@ function apiCorsProxyPlugin(): Plugin {
 
 export default defineConfig({
   main: {
+    // '@smartsub/bridge' 类型侧由根 tsconfig paths 指向 declaration-only 门面
+    // (防止根程序 import 追入整棵 smartsub 树),打包侧在此指回真实实现。
+    resolve: {
+      alias: {
+        '@smartsub/bridge': path.resolve(__dirname, 'electron/services/smartsub/bridge/index.ts'),
+      },
+    },
     build: {
       rollupOptions: {
         input: {
