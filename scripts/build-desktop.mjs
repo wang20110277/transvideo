@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -161,12 +161,72 @@ function finalizeBuildOutput(stagingBuildOutputDir, finalBuildOutputDir) {
   );
 }
 
+// smartsub 打包断言:资源与 ffmpeg 二进制必须在包内(spec §6)
+// 在 electron-builder 产物目录内定位 unpacked 应用目录:mac 为 *.app(位于 mac[-arch]/ 下,
+// 目录名以 electron-builder 实际输出为准),win/linux 为 *-unpacked。
+function findUnpackedAppDir(buildOutputDir) {
+  const queue = [buildOutputDir];
+
+  for (let depth = 0; queue.length > 0 && depth < 5; depth += 1) {
+    for (const current of [...queue]) {
+      queue.shift();
+      let entries;
+      try {
+        entries = readdirSync(current, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory()) {
+          continue;
+        }
+        const fullPath = resolve(current, entry.name);
+        const isMacApp = buildTarget === 'mac' && entry.name.endsWith('.app');
+        const isUnpackedDir = buildTarget !== 'mac' && entry.name.endsWith('-unpacked');
+        if (isMacApp || isUnpackedDir) {
+          return fullPath;
+        }
+        queue.push(fullPath);
+      }
+    }
+  }
+
+  return null;
+}
+
+function assertSmartsubResources(buildOutputDir, arch) {
+  const unpackedAppDir = findUnpackedAppDir(buildOutputDir);
+
+  if (!unpackedAppDir) {
+    console.error(
+      `[smartsub] 打包断言失败:${buildOutputDir} 内找不到 unpacked 应用目录(buildTarget=${buildTarget})`,
+    );
+    process.exit(1);
+  }
+
+  const resourcesDir =
+    buildTarget === 'mac' ? join(unpackedAppDir, 'Contents', 'Resources') : join(unpackedAppDir, 'resources');
+  const checks = [
+    join(resourcesDir, 'extraResources', 'smartsub', 'sherpa'),
+    join(resourcesDir, 'extraResources', 'smartsub', 'ggml-silero-v6.2.0.bin'),
+    join(resourcesDir, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static'),
+  ];
+  const missing = checks.filter((p) => !existsSync(p));
+  if (missing.length) {
+    console.error('[smartsub] 打包断言失败,缺失:\n' + missing.join('\n'));
+    process.exit(1);
+  }
+  console.log(`[smartsub] 打包断言通过 (${buildTarget}-${arch}, ${unpackedAppDir})`);
+}
+
 function buildForArch(arch) {
   const stagingBuildOutputDir = resolveStagingBuildOutputDir(arch);
   const finalBuildOutputDir = resolveFinalBuildOutputDir(arch);
 
   run('npx', ['electron-builder', ...resolveBuilderArgs(arch), `-c.directories.output=${stagingBuildOutputDir}`]);
   finalizeBuildOutput(stagingBuildOutputDir, finalBuildOutputDir);
+  // 产物可能因目录锁定留在 staging(finalizeBuildOutput 已告警),断言取实际存在者
+  assertSmartsubResources(existsSync(finalBuildOutputDir) ? finalBuildOutputDir : stagingBuildOutputDir, arch);
 }
 
 if (shouldGenerateIcons()) {
