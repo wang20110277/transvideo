@@ -84,7 +84,13 @@ export default defineConfig({
         },
         output: {
           format: 'cjs'
-        }
+        },
+        external: [
+          'ffmpeg-static', 'fluent-ffmpeg', 'axios', 'fs-extra', 'lodash', 'uuid',
+          'iconv-lite', 'opencc-js', 'srt-webvtt', 'tinyld', 'fontkit', 'decompress',
+          'msedge-tts', 'openai', 'zod', 'electron-store', 'https-proxy-agent',
+          'http-proxy-agent', 'systeminformation', 'jsonrepair', 'diff',
+        ]
       }
     }
   },
