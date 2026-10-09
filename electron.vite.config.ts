@@ -90,6 +90,9 @@ export default defineConfig({
           'iconv-lite', 'opencc-js', 'srt-webvtt', 'tinyld', 'fontkit', 'decompress',
           'msedge-tts', 'openai', 'zod', 'electron-store', 'https-proxy-agent',
           'http-proxy-agent', 'systeminformation', 'jsonrepair', 'diff',
+          // Task 3 补装(496c816)的翻译服务运行时依赖,同样运行时 require、不进 bundle
+          '@alicloud/alimt20181012', '@alicloud/openapi-client', '@alicloud/tea-util',
+          '@volcengine/openapi', 'really-relaxed-json',
         ]
       }
     }
