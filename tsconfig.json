@@ -30,5 +30,6 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src", "electron"],
+  "exclude": ["node_modules", "electron/services/smartsub"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

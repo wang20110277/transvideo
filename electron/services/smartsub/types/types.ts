@@ -1,0 +1,365 @@
+import type { TaskActivity } from './taskActivity';
+import type { EngineStatus, TranscriptionEngine } from './engine';
+import type { MissedSpeechSummary, MissedSpeechWarning } from './missedSpeech';
+import type {
+  DubbingEngineSelection,
+  DubbingCloneQuality,
+  DubbingOverflowMode,
+  DubbingOverlapMode,
+} from './dubbing';
+import type { EncoderMode, SubtitleStyle, VideoQuality } from './subtitleMerge';
+import type {
+  SubtitleOutputFiles,
+  SubtitleOutputFormat,
+} from './subtitleOutput';
+
+export interface ISystemInfo {
+  modelsInstalled: string[];
+  modelsPath: string;
+  downloadingModels: string[];
+  totalMemoryGB?: number;
+  fasterWhisperModelsInstalled?: string[];
+  fasterWhisperModelsPath?: string;
+  pythonEngineStatus?: EngineStatus;
+  /** funasr 引擎包是否已安装 */
+  funasrEngineInstalled?: boolean;
+  /** funasr 共用 VAD 是否已安装 */
+  funasrVadInstalled?: boolean;
+  /** 已安装的 funasr ASR 模型 id（如 ['sensevoice-small','paraformer-zh']） */
+  funasrAsrModelsInstalled?: string[];
+  /** funasr 模型根目录（固定路径，仅展示用，不可更改） */
+  funasrModelsPath?: string;
+  /** qwen 引擎包（sherpa-onnx，与 funasr 同库）是否已安装 */
+  qwenEngineInstalled?: boolean;
+  /** qwen 共用 silero VAD 是否已安装 */
+  qwenVadInstalled?: boolean;
+  /** 已安装的 qwen 模型 id（如 ['qwen3-asr-0.6b']） */
+  qwenModelsInstalled?: string[];
+  /** qwen 模型根目录（固定路径，仅展示用，不可更改） */
+  qwenModelsPath?: string;
+  /** fireRed 引擎包（sherpa-onnx，与 funasr 同库）是否已安装 */
+  fireRedEngineInstalled?: boolean;
+  /** fireRed 共用 silero VAD 是否已安装 */
+  fireRedVadInstalled?: boolean;
+  /** 已安装的 fireRed 模型 id（如 ['fire-red-asr-large-zh-en']） */
+  fireRedModelsInstalled?: string[];
+  /** fireRed 模型根目录（固定路径，仅展示用，不可更改） */
+  fireRedModelsPath?: string;
+  /** Parakeet 引擎包（sherpa-onnx，与其它本地 sherpa ASR 共用）是否已安装 */
+  parakeetEngineInstalled?: boolean;
+  /** Parakeet 共用 silero VAD 是否已安装 */
+  parakeetVadInstalled?: boolean;
+  /** 已安装的 Parakeet 模型 id */
+  parakeetModelsInstalled?: string[];
+  /** Parakeet 模型根目录 */
+  parakeetModelsPath?: string;
+  /** 可选角色分离模型（pyannote + 3D-Speaker）是否完整安装。 */
+  speakerDiarizationModelInstalled?: boolean;
+  speakerDiarizationRuntimeInstalled?: boolean;
+  /** 角色分离模型根目录。 */
+  speakerDiarizationModelsPath?: string;
+  /** userData 默认存储基座（「默认路径含中文」警示判定用） */
+  userDataPath?: string;
+  /** 统一存储根目录原始设置值（'' = 未设置） */
+  storageRoot?: string;
+  /** 各引擎模型目录来源：默认 / 统一目录 / 单独设置（引擎页 Badge 用） */
+  modelPathSources?: {
+    ggml: StoragePathSource;
+    ct2: StoragePathSource;
+    funasr: StoragePathSource;
+    qwen: StoragePathSource;
+    firered: StoragePathSource;
+    parakeet: StoragePathSource;
+  };
+}
+
+/** 与 main/helpers/storagePaths.ts 的 StorageSource 对齐（types 层无法反向依赖 main）。 */
+export type StoragePathSource = 'override' | 'storageRoot' | 'default';
+
+/** 单个文件的文稿匹配结果摘要（详细替换内容不落任务存储，避免泄露整篇文稿）。 */
+export interface ManuscriptMatchSummary {
+  manuscriptName: string;
+  totalCues: number;
+  replacedCues: number;
+  matchedGroups: number;
+  /** 已替换 cue 的平均相似度，0–1。 */
+  averageConfidence: number;
+}
+
+export interface IFiles extends SubtitleOutputFiles {
+  /** Runtime event routing; file UUIDs can be reused by restored drafts. */
+  taskProjectId?: string;
+  taskActivity?: TaskActivity;
+  uuid: string;
+  filePath: string;
+  fileName: string;
+  fileExtension: string;
+  directory: string;
+  extractAudio?: boolean;
+  extractSubtitle?: boolean;
+  translateSubtitle?: boolean;
+  /** 角色分离独立阶段状态；undefined 表示尚未进入该阶段。 */
+  speakerDiarization?: '' | 'loading' | 'done' | 'error';
+  speakerDiarizationProgress?: number;
+  speakerDiarizationError?: string;
+  refineSubtitleError?: string;
+  /** 配音附加阶段状态（运行时同其余阶段字段为 ''|loading|done|error 字符串） */
+  dubbing?: boolean;
+  dubbingError?: string;
+  /** 合成附加阶段状态（同上字符串状态机约定） */
+  composeVideo?: boolean;
+  audioFile?: string;
+  srtFile?: string;
+  tempSrtFile?: string;
+  tempAudioFile?: string;
+  translatedSrtFile?: string;
+  tempTranslatedSrtFile?: string;
+  exportSubtitle?: '' | 'loading' | 'done' | 'error';
+  exportSubtitleError?: string;
+  /** Canonical inputs retained until export succeeds, so retry never calls ASR/translation. */
+  subtitleExportCheckpoint?: {
+    sourceSrtPath?: string;
+    translatedSrtPath?: string;
+    sourceOwned: boolean;
+    translationActive: boolean;
+    translateOk: boolean;
+  };
+  /** 字幕翻译失败行；译文文件保留原文作为可播放回退。 */
+  translationFailures?: Array<{ subtitleId: string; error?: string }>;
+  /** 校对用无损中间态 sidecar，保存源文/译文/时间轴，避免直接读写有损交付物。 */
+  proofreadDataFile?: string;
+  /** 校对 sidecar 是否已基于本轮字幕和诊断数据写入完成。 */
+  proofreadDataReady?: 'loading' | 'done' | 'error';
+  /** 词级时间轴 sidecar（`<tempAudio>.words.json`）：AI 语义断句精确对齐用；无词级引擎缺省。 */
+  wordTimelineFile?: string;
+  missedSpeechSummary?: MissedSpeechSummary;
+  missedSpeechWarnings?: MissedSpeechWarning[];
+  speechReviewStage?: 'checking' | 'reviewing' | 'complete';
+  /** Original recognition and automatic changes, for inspecting/recovering an edit. */
+  speechReviewFile?: string;
+  speechReviewOriginalFile?: string;
+  speechReviewSummary?: {
+    status: 'complete' | 'unavailable';
+    checked?: number;
+    recovered?: number;
+    retimed?: number;
+    pending?: number;
+    changes?: Array<{
+      start: number;
+      end: number;
+      original: string;
+      text: string;
+    }>;
+  };
+  /** ASR 后参考文稿匹配阶段；缺省不存在即功能关闭。 */
+  manuscriptMatch?: '' | 'loading' | 'done';
+  /** 稳定的非致命回退码，renderer 据此本地化；不会令任务失败。 */
+  manuscriptMatchError?: string;
+  /**
+   * 通读摘要阶段。字段名必须与 StageKey 同名。
+   * 降级也结算为 done，原因写在 summarizeEpisodeError。
+   */
+  summarizeEpisode?: '' | 'loading' | 'done' | 'error';
+  /** 摘要降级原因的稳定码；阶段仍为 done，不令任务失败。 */
+  summarizeEpisodeError?: string;
+  /** 本文件通读摘要正文；resume 时非空则跳过再打。 */
+  episodeSummary?: string;
+  summaryUsage?: { input_tokens?: number; output_tokens?: number };
+  /** 摘要源指纹（sha1）；与本次字幕、提示词、服务商和语言一致才复用。 */
+  summarySourceHash?: string;
+  /** 仅供日志/tooltip 兜底的诊断细节，不参与本地化键。 */
+  manuscriptMatchErrorDetail?: string;
+  manuscriptMatchSummary?: ManuscriptMatchSummary;
+  /** 单文件独立绑定的参考文稿路径（若指定，优先于 formData.manuscriptPath；设为 '__none__' 表示显式不匹配） */
+  manuscriptPath?: string;
+  /** 单文件独立绑定的参考文稿显示名 */
+  manuscriptName?: string;
+  /** 本次转写实际使用的后端标签（如 "CUDA 12.4.0" / "Vulkan" / "CPU"） */
+  whisperBackend?: string;
+  /** 该文件走了内封软字幕直提（跳过 ASR；角色分离开启时仍会抽音频）：用于任务列表标识 */
+  embeddedSubtitle?: boolean;
+  /**
+   * 人工检查点状态（'' 未到达 | 'review' 待校对 | 'passed' 已通过）。
+   * review 不参与启动时的中断标记（非 loading），跨重启保留。
+   */
+  subtitleGate?: '' | 'review' | 'passed';
+  dubbingGate?: '' | 'review' | 'passed';
+  /**
+   * 配对模式（视频+字幕混合输入）：随媒体文件携带的既有字幕路径。
+   * 存在且文件有效时跳过提取/听写，直接以它为源字幕进入翻译/配音/合成。
+   */
+  providedSubtitlePath?: string;
+  /** 配音阶段：持久化会话 id（重试续跑已完成行、工作台回开检视） */
+  dubbingSessionId?: string;
+  /** 配音阶段产物：完整配音轨 wav（会话目录内，锚定媒体时间轴） */
+  dubbedTrackPath?: string;
+  /** 配音阶段交付物：任务无合成阶段时导出到输入文件旁的 `<名>-dubbed.wav` */
+  dubbedAudioPath?: string;
+  /** 配音阶段产物：时移发生时的顺延版字幕（合成阶段优先烧录它） */
+  shiftedSubtitlePath?: string;
+  /** 合成阶段产物：成品视频路径 */
+  finalVideoPath?: string;
+}
+
+export const TRANSLATION_INCOMPLETE_PIPELINE_PAUSED =
+  'TRANSLATION_INCOMPLETE_PIPELINE_PAUSED';
+export const TRANSLATION_INCOMPLETE_FOR_DUBBING =
+  'TRANSLATION_INCOMPLETE_FOR_DUBBING';
+export const TRANSLATION_INCOMPLETE_FOR_COMPOSE =
+  'TRANSLATION_INCOMPLETE_FOR_COMPOSE';
+
+export type TaskProjectType =
+  | 'generateAndTranslate'
+  | 'generateOnly'
+  | 'translateOnly';
+
+/** 一次任务工程：任务维度记录，下挂文件列表 */
+export interface TaskProject {
+  id: string;
+  /** 默认「时间 + 第一个文件名」，用户可改 */
+  name: string;
+  taskType: TaskProjectType;
+  files: IFiles[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * 任务级配音附加阶段配置（与工作台 DubbingConfig 同构的子集）：
+ * 文本源自动解析（纯译文优先）、输出恒为配音轨（视频封装交给合成阶段）。
+ */
+export interface PipelineDubConfig {
+  engine: DubbingEngineSelection;
+  language?: string;
+  voice: string;
+  /** 整体语速（1 = 原速） */
+  globalSpeed: number;
+  cloneQuality?: DubbingCloneQuality;
+  /** 本地并行合成路数（1–3，默认 1） */
+  localConcurrency?: number;
+  /** 全自动过长兜底（默认截断） */
+  overflow?: DubbingOverflowMode;
+  /** 重叠 cue 消解（默认顺延） */
+  overlapMode?: DubbingOverlapMode;
+}
+
+/** 任务级合成附加阶段配置（矩阵其余维度按上游产物自动推导） */
+export interface PipelineComposeConfig {
+  /** 字幕并入方式（默认 hard 烧录；none 仅换配音轨，要求配音阶段开启） */
+  subtitle: 'hard' | 'soft' | 'none';
+  /** 烧录样式来源预设 id（系统预设或用户样式；UI 展示与配方回填用） */
+  styleId?: string;
+  /** 样式显示名快照（任务详情/最近任务展示，不随预设改名变化） */
+  styleName?: string;
+  /** 烧录样式（任务创建时解析内嵌；缺省回退工作台默认样式） */
+  style?: SubtitleStyle;
+  /** 烧录导出画质（缺省回退全局合成偏好） */
+  videoQuality?: VideoQuality;
+  /** 烧录编码方式（缺省回退全局合成偏好；运行期硬件不可用自动回落 CPU） */
+  encoderMode?: EncoderMode;
+}
+
+/** 人工检查点档位 */
+export type PipelineGateMode = 'manual' | 'auto';
+
+/**
+ * 人工把关配置（缺省 auto 全自动）：
+ * subtitle=字幕校对（字幕段成功后、配音/合成前），dubbing=配音确认（配音后、合成前）。
+ */
+export interface PipelineGatesConfig {
+  subtitle?: PipelineGateMode;
+  dubbing?: PipelineGateMode;
+}
+
+export interface IFormData {
+  /** 任务类型（运行时由任务携带）：用于区分源字幕是 ASR 生成还是用户导入。 */
+  taskType?: TaskProjectType;
+  /** 创建来源配方名（向导应用用户配方时随任务快照记录，任务页标题展示） */
+  recipeName?: string;
+  /** 配音附加阶段（缺省不配音） */
+  dub?: PipelineDubConfig;
+  /** 合成附加阶段（缺省不合成；仅媒体输入任务可用） */
+  compose?: PipelineComposeConfig;
+  /** 人工把关（缺省全自动；仅带附加阶段的任务有意义） */
+  gates?: PipelineGatesConfig;
+  /** 转写引擎（逐任务选择，缺省 builtin）。 */
+  transcriptionEngine?: TranscriptionEngine;
+  /** 转写模型名（引擎相关；云引擎为服务商实例内的模型 id）。 */
+  model?: string;
+  /** 云端听写：选中的云 ASR 服务商实例 id（transcriptionEngine==='cloud' 时必填）。 */
+  asrProviderId?: string;
+  /** 优先直提媒体内封文本字幕；显式 false 时忽略内封字幕并强制使用 ASR。缺省 true。 */
+  useEmbeddedSubtitles?: boolean;
+  translateContent:
+    | 'onlyTranslate'
+    | 'sourceAndTranslate'
+    | 'translateAndSource';
+  targetSrtSaveOption: string;
+  sourceSrtSaveOption?: string;
+  customTargetSrtFileName: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  translateRetryTimes: string;
+  /** 翻译服务商 id。'-1' 表示不翻译。 */
+  translateProvider?: string;
+  subtitleOutputFormat?: SubtitleOutputFormat;
+  /** Missing on legacy tasks; the singular format remains the compatibility fallback. */
+  subtitleOutputFormats?: SubtitleOutputFormat[];
+  subtitleLayout?: 'original' | 'two-line';
+  subtitleLineWidth?: number;
+  /**
+   * 生成字幕时单条字幕最大显示字数 / 宽度（CJK 记 2、其余记 1）。
+   * 0 或空 = 智能断句（引擎默认）；-1 = 不限制长度（仅按停顿/标点断句，不按字数硬切）；
+   * 正数 = 自定义上限（超出时在标点或词边界处拆分）。
+   */
+  maxSubtitleChars?: number;
+  /** Task-specific cue limits; missing values retain the engine defaults. */
+  subtitleMaxDuration?: number;
+  subtitleMaxGap?: number;
+  /** Keep detected pauses, without extending cue tails or merging across silence. */
+  preserveSpeechPauses?: boolean;
+  /**
+   * faster-whisper 解码高级参数（均为任务级、可选）。
+   * 缺省时不下发，让引擎保留自身默认与 temperature 回退序列。
+   */
+  fasterWhisperBeamSize?: number;
+  fasterWhisperBestOf?: number;
+  fasterWhisperTemperature?: number;
+  fasterWhisperCompressionRatioThreshold?: number;
+  fasterWhisperLogProbThreshold?: number;
+  fasterWhisperNoSpeechThreshold?: number;
+  /** 中文标点去除（任务级开关）：开启后把中文标点替换为空格。作用于源字幕(中文源)与译文(中文目标)。缺省关闭。 */
+  removeChinesePunctuation?: boolean;
+  /** AI 语义断句（精修遍 A，openspec: add-ai-subtitle-refine）。缺省关闭；旧快照无此键即关闭。 */
+  aiSegmentation?: boolean;
+  /** AI 字幕校正（精修遍 B）。缺省关闭。 */
+  aiCorrection?: boolean;
+  /** Missing retains the legacy correction policy; applied only to AI correction. */
+  subtitleFillerPolicy?: 'remove-hesitations' | 'preserve';
+  /** Task-local style for AI subtitle translation, never changes provider defaults. */
+  subtitleTranslationStyle?: 'neutral' | 'conversational';
+  /** 精修服务商：缺省/'follow-translation' = 跟随翻译服务（AI 类型时解析为同一服务商），或显式 AI 服务商 id。 */
+  refineProvider?: string;
+  /** 角色分离：在转写/翻译后用本地 sherpa 模型分析角色并对齐字幕。 */
+  speakerDiarization?: boolean;
+  /** 已知角色数量（2–8）；0/undefined = 自动聚类。 */
+  speakerDiarizationCount?: number;
+  /** 是否把 `[Speaker N]` 角色标签写入字幕交付物；缺省 false，仅存 sidecar metadata。 */
+  speakerDiarizationEmbedInSubtitle?: boolean;
+  /**
+   * ASR 参考文稿（TXT / Markdown）。路径存在即开启；只替换高置信匹配文本，
+   * 时间轴始终来自 ASR。缺省/空字符串关闭，保持旧任务与配方行为。
+   */
+  manuscriptPath?: string;
+  /** 创建快照时的显示名；运行时仍以 manuscriptPath 为唯一数据源。 */
+  manuscriptName?: string;
+  /** 本次任务参与匹配的词库 id；undefined = 回落「全部已启用」（旧行为） */
+  glossaryIds?: string[];
+  /** 通读摘要开关；缺省 false，旧快照 / 旧配方无此键即关闭。 */
+  generateSummary?: boolean;
+  /**
+   * 摘要服务商：缺省 / 'follow-translation' = 跟随翻译服务（须 AI），
+   * 或显式 AI 服务商 id。
+   */
+  summaryProvider?: string;
+}

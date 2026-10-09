@@ -1,0 +1,465 @@
+/**
+ * Shared proofread sidecar contract and speaker-domain helpers.
+ *
+ * Keep this module dependency-free: main, renderer, dubbing and focused Node
+ * tests all consume the same normalization rules.
+ */
+
+import {
+  associateMissedSpeechWarnings,
+  normalizeMissedSpeechWarnings,
+  summarizeMissedSpeech,
+  type MissedSpeechWarning,
+  type MissedSpeechSummary,
+} from './missedSpeech';
+import type { SubtitleOutputFiles } from './subtitleOutput';
+
+export const PROOFREAD_DATA_VERSION = 2 as const;
+
+export const SPEAKER_COLOR_PALETTE = [
+  '#2563eb',
+  '#dc2626',
+  '#16a34a',
+  '#9333ea',
+  '#ea580c',
+  '#0891b2',
+  '#c026d3',
+  '#4f46e5',
+] as const;
+
+export interface SpeakerInfo {
+  /** Stable, one-based identity. Renaming never changes it. */
+  id: number;
+  displayName: string;
+  color: string;
+  /** The UI may localize an automatically generated name without losing intent. */
+  autoName?: boolean;
+}
+
+export interface ProofreadDataMeta extends SubtitleOutputFiles {
+  createdAt: string;
+  updatedAt: string;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  translateContent?: string;
+  outputFormat?: string;
+  subtitleLayout?: 'original' | 'two-line';
+  subtitleLineWidth?: number;
+  sourceFile?: string;
+  targetFile?: string;
+  finalTargetFile?: string;
+  /** 任务选用词库 id；undefined = 回落全部已启用；[] = 明确不用词库 */
+  glossaryIds?: string[];
+  /** 本集通读摘要；缺省表示未生成 */
+  episodeSummary?: string;
+}
+
+export interface ProofreadDataCue {
+  id: string;
+  startMs: number;
+  endMs: number;
+  source: string;
+  target: string;
+  /** 翻译阶段的逐行状态；缺省表示历史文件中的成功/未知状态。 */
+  translationStatus?: 'success' | 'failed';
+  translationError?: string;
+  missedSpeechWarnings?: MissedSpeechWarning[];
+  /** Complete assignment; [] is explicit unassigned, absence means no role metadata. */
+  speakerIds?: number[];
+  /** Explicit primary role. Never infer priority from sorted IDs after editing. */
+  primarySpeakerId?: number;
+  /** Manual assignments remain authoritative when cue timing is edited later. */
+  speakerAssignmentSource?: 'manual';
+}
+
+export interface ProofreadDataFileV1 {
+  version: 1;
+  meta: ProofreadDataMeta;
+  cues: ProofreadDataCue[];
+}
+
+export interface ProofreadDataFileV2 {
+  version: typeof PROOFREAD_DATA_VERSION;
+  meta: ProofreadDataMeta;
+  speakers: SpeakerInfo[];
+  cues: ProofreadDataCue[];
+  missedSpeechWarnings?: MissedSpeechWarning[];
+  missedSpeechSummary?: MissedSpeechSummary;
+}
+
+export type ProofreadDataFileInput = ProofreadDataFileV1 | ProofreadDataFileV2;
+
+export interface SpeakerAssignableCue {
+  speakerIds?: readonly number[];
+  primarySpeakerId?: number;
+}
+
+export function hasExplicitSpeakerAssignment(value: object): boolean {
+  return Object.prototype.hasOwnProperty.call(value, 'speakerIds');
+}
+
+export function shouldRealignSpeakerAssignment(
+  timingChanged: boolean,
+  source?: 'manual',
+): boolean {
+  return timingChanged && source !== 'manual';
+}
+
+export function isValidSpeakerId(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) > 0;
+}
+
+/** Deduplicate positive integer IDs while preserving their semantic order. */
+export function normalizeSpeakerIds(
+  values: readonly unknown[] | null | undefined,
+): number[] {
+  const result: number[] = [];
+  const seen = new Set<number>();
+  for (const value of values || []) {
+    if (!isValidSpeakerId(value) || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+
+export function normalizePrimarySpeakerId(
+  primarySpeakerId: unknown,
+  speakerIds: readonly number[],
+): number | undefined {
+  return isValidSpeakerId(primarySpeakerId) &&
+    speakerIds.includes(primarySpeakerId)
+    ? primarySpeakerId
+    : speakerIds[0];
+}
+
+export function defaultSpeakerColor(id: number): string {
+  return SPEAKER_COLOR_PALETTE[
+    (Math.max(1, id) - 1) % SPEAKER_COLOR_PALETTE.length
+  ];
+}
+
+export function defaultSpeakerName(id: number): string {
+  return `Speaker ${id}`;
+}
+
+export function createDefaultSpeaker(
+  id: number,
+  displayName = defaultSpeakerName(id),
+): SpeakerInfo {
+  return {
+    id,
+    displayName,
+    color: defaultSpeakerColor(id),
+    autoName: true,
+  };
+}
+
+export function sanitizeSpeakerDisplayName(value: unknown): string {
+  return String(value ?? '')
+    .replace(/[\x00-\x1f\x7f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40);
+}
+
+function normalizeSpeakerInfo(value: unknown): SpeakerInfo | null {
+  if (!value || typeof value !== 'object') return null;
+  const input = value as Partial<SpeakerInfo>;
+  if (!isValidSpeakerId(input.id)) return null;
+  const name = sanitizeSpeakerDisplayName(input.displayName);
+  const color =
+    typeof input.color === 'string' &&
+    SPEAKER_COLOR_PALETTE.includes(input.color as any)
+      ? input.color
+      : defaultSpeakerColor(input.id);
+  return {
+    id: input.id,
+    displayName: name || defaultSpeakerName(input.id),
+    color,
+    ...(input.autoName === true ? { autoName: true } : {}),
+  };
+}
+
+export function normalizeSpeakerAssignment<T extends SpeakerAssignableCue>(
+  cue: T,
+): T {
+  const hasExplicitAssignment = hasExplicitSpeakerAssignment(cue);
+  const speakerIds = normalizeSpeakerIds(cue.speakerIds);
+  const primarySpeakerId = normalizePrimarySpeakerId(
+    cue.primarySpeakerId,
+    speakerIds,
+  );
+  const result = { ...cue } as T & {
+    speakerIds?: number[];
+    primarySpeakerId?: number;
+  };
+  if (speakerIds.length) {
+    result.speakerIds = speakerIds;
+    result.primarySpeakerId = primarySpeakerId;
+  } else {
+    if (hasExplicitAssignment) result.speakerIds = [];
+    else delete result.speakerIds;
+    delete result.primarySpeakerId;
+  }
+  return result;
+}
+
+export function orderedSpeakerIds(cue: SpeakerAssignableCue): number[] {
+  const ids = normalizeSpeakerIds(cue.speakerIds);
+  const primary = normalizePrimarySpeakerId(cue.primarySpeakerId, ids);
+  return primary ? [primary, ...ids.filter((id) => id !== primary)] : ids;
+}
+
+/** Render user-facing names only at the deliverable boundary. */
+export function prefixTextWithSpeakerNames(
+  text: string,
+  cue: SpeakerAssignableCue,
+  speakers: readonly SpeakerInfo[],
+): string {
+  const ids = orderedSpeakerIds(cue);
+  if (!ids.length) return text;
+  const speakerById = new Map(speakers.map((speaker) => [speaker.id, speaker]));
+  const names = ids.map((id) => {
+    const name = speakerById.get(id)?.displayName || defaultSpeakerName(id);
+    return name.replace(/\[/g, '［').replace(/\]/g, '］');
+  });
+  return `[${names.join(' + ')}] ${text}`.trimEnd();
+}
+
+export function normalizeSpeakerRoster(
+  speakers: readonly unknown[] | null | undefined,
+  cues: readonly SpeakerAssignableCue[],
+): SpeakerInfo[] {
+  const roster: SpeakerInfo[] = [];
+  const seen = new Set<number>();
+  for (const raw of speakers || []) {
+    const speaker = normalizeSpeakerInfo(raw);
+    if (!speaker || seen.has(speaker.id)) continue;
+    seen.add(speaker.id);
+    roster.push(speaker);
+  }
+  const referenced = new Set<number>();
+  for (const cue of cues) {
+    for (const id of normalizeSpeakerIds(cue.speakerIds)) referenced.add(id);
+  }
+  for (const id of Array.from(referenced).sort((a, b) => a - b)) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    roster.push(createDefaultSpeaker(id));
+  }
+  return roster;
+}
+
+/** Editing must reject corrupted persisted values before normalization repairs them. */
+export function assertValidProofreadData(input: unknown): void {
+  if (!input || typeof input !== 'object' || Array.isArray(input))
+    throw new Error('Invalid proofread data');
+  const raw = input as ProofreadDataFileInput;
+  if ((raw.version !== 1 && raw.version !== 2) || !Array.isArray(raw.cues))
+    throw new Error('Unsupported proofread data version');
+  for (const cue of raw.cues) {
+    if (
+      !cue ||
+      typeof cue !== 'object' ||
+      !Number.isSafeInteger(cue.startMs) ||
+      !Number.isSafeInteger(cue.endMs) ||
+      cue.startMs < 0 ||
+      cue.endMs <= cue.startMs ||
+      typeof cue.source !== 'string' ||
+      (cue.target !== undefined && typeof cue.target !== 'string') ||
+      (cue.speakerIds !== undefined &&
+        (!Array.isArray(cue.speakerIds) ||
+          !cue.speakerIds.every(isValidSpeakerId))) ||
+      (cue.primarySpeakerId !== undefined &&
+        !isValidSpeakerId(cue.primarySpeakerId))
+    )
+      throw new Error('Invalid proofread cue');
+  }
+  if (raw.version === 2 && raw.speakers !== undefined) {
+    const seen = new Set<number>();
+    if (!Array.isArray(raw.speakers))
+      throw new Error('Invalid proofread speakers');
+    for (const speaker of raw.speakers) {
+      if (
+        !speaker ||
+        !isValidSpeakerId(speaker.id) ||
+        seen.has(speaker.id) ||
+        typeof speaker.displayName !== 'string' ||
+        typeof speaker.color !== 'string'
+      )
+        throw new Error('Invalid proofread speaker');
+      seen.add(speaker.id);
+    }
+  }
+}
+
+/**
+ * 归一化 sidecar meta.glossaryIds。
+ * 非数组 → undefined（旧 sidecar / 回落全部已启用）；
+ * 数组（含 []）只保留字符串成员，顺序不变；[] = 明确不用词库。
+ */
+export function normalizeMetaGlossaryIds(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((id): id is string => typeof id === 'string');
+}
+
+function normalizeProofreadMeta(rawMeta: unknown): ProofreadDataMeta {
+  const metaInput =
+    rawMeta && typeof rawMeta === 'object'
+      ? (rawMeta as Partial<ProofreadDataMeta>)
+      : {};
+  const now = new Date(0).toISOString();
+  const { glossaryIds: rawGlossaryIds, ...restMeta } = metaInput;
+  const glossaryIds = normalizeMetaGlossaryIds(rawGlossaryIds);
+  return {
+    ...restMeta,
+    createdAt: String(metaInput.createdAt || now),
+    updatedAt: String(metaInput.updatedAt || metaInput.createdAt || now),
+    ...(glossaryIds !== undefined ? { glossaryIds } : {}),
+  };
+}
+
+/** Accept v1/v2 sidecars and return the single canonical v2 shape. */
+export function normalizeProofreadData(input: unknown): ProofreadDataFileV2 {
+  if (!input || typeof input !== 'object') {
+    throw new Error('Invalid proofread data');
+  }
+  const raw = input as Partial<ProofreadDataFileInput> & {
+    version?: unknown;
+    cues?: unknown;
+    meta?: unknown;
+    speakers?: unknown;
+    missedSpeechWarnings?: unknown;
+    missedSpeechSummary?: unknown;
+  };
+  if ((raw.version !== 1 && raw.version !== 2) || !Array.isArray(raw.cues)) {
+    throw new Error('Unsupported proofread data version');
+  }
+  const cues = raw.cues.map((value, index) => {
+    const cue = (value || {}) as Partial<ProofreadDataCue>;
+    const hasExplicitAssignment = hasExplicitSpeakerAssignment(cue);
+    const normalized = normalizeSpeakerAssignment({
+      id: String(cue.id || index + 1),
+      startMs: Number.isFinite(cue.startMs) ? Number(cue.startMs) : 0,
+      endMs: Number.isFinite(cue.endMs) ? Number(cue.endMs) : 0,
+      source: String(cue.source ?? ''),
+      target: String(cue.target ?? ''),
+      ...(cue.translationStatus === 'failed' ||
+      cue.translationStatus === 'success'
+        ? { translationStatus: cue.translationStatus }
+        : {}),
+      ...(cue.translationError
+        ? { translationError: String(cue.translationError) }
+        : {}),
+      ...(Array.isArray(cue.missedSpeechWarnings)
+        ? {
+            missedSpeechWarnings: normalizeMissedSpeechWarnings(
+              cue.missedSpeechWarnings,
+            ),
+          }
+        : {}),
+      ...(hasExplicitAssignment ? { speakerIds: cue.speakerIds } : {}),
+      primarySpeakerId: cue.primarySpeakerId,
+      ...(cue.speakerAssignmentSource === 'manual'
+        ? { speakerAssignmentSource: 'manual' as const }
+        : {}),
+    });
+    return normalized as ProofreadDataCue;
+  });
+  // Warning ranges are authoritative. Older sidecars may only have stored
+  // them on individual cues, so recover those ranges when the file-level
+  // collection is absent before rebuilding cue associations from timing.
+  const rawWarnings = Array.isArray(raw.missedSpeechWarnings)
+    ? raw.missedSpeechWarnings
+    : cues.flatMap((cue) => cue.missedSpeechWarnings || []);
+  const warnings = associateMissedSpeechWarnings(
+    normalizeMissedSpeechWarnings(rawWarnings),
+    cues,
+  );
+  for (const cue of cues) {
+    const related = warnings.filter((warning) =>
+      warning.cueIds.includes(cue.id),
+    );
+    // Rebuild cue-local associations on every read/save. This prevents stale
+    // cue IDs after split, merge, or timing edits while retaining file-level
+    // warnings that currently overlap no cue.
+    delete cue.missedSpeechWarnings;
+    if (related.length) cue.missedSpeechWarnings = related;
+  }
+  return {
+    version: PROOFREAD_DATA_VERSION,
+    meta: normalizeProofreadMeta(raw.meta),
+    speakers: normalizeSpeakerRoster(
+      raw.version === 2 && Array.isArray(raw.speakers) ? raw.speakers : [],
+      cues,
+    ),
+    cues,
+    ...(warnings.length || Array.isArray(raw.missedSpeechWarnings)
+      ? {
+          missedSpeechWarnings: warnings,
+          missedSpeechSummary: summarizeMissedSpeech(
+            warnings,
+            (raw.missedSpeechSummary as MissedSpeechSummary | undefined)
+              ?.engineVadAvailable === true,
+          ),
+        }
+      : {}),
+  };
+}
+
+export function nextSpeakerId(speakers: readonly SpeakerInfo[]): number {
+  const used = new Set(speakers.map((speaker) => speaker.id));
+  let id = 1;
+  while (used.has(id)) id += 1;
+  return id;
+}
+
+export function countSpeakerCues(
+  cues: readonly SpeakerAssignableCue[],
+  speakerId: number,
+): number {
+  return cues.filter((cue) =>
+    normalizeSpeakerIds(cue.speakerIds).includes(speakerId),
+  ).length;
+}
+
+/** Move every source assignment to target, preserving overlap and explicit primary. */
+export function moveSpeakerAssignments<T extends SpeakerAssignableCue>(
+  cues: readonly T[],
+  sourceId: number,
+  targetId: number,
+): T[] {
+  if (sourceId === targetId) return cues.map((cue) => ({ ...cue }));
+  return cues.map((cue) => {
+    const ids = normalizeSpeakerIds(cue.speakerIds);
+    if (!ids.includes(sourceId)) return { ...cue };
+    const replaced = normalizeSpeakerIds(
+      ids.map((id) => (id === sourceId ? targetId : id)),
+    );
+    return normalizeSpeakerAssignment({
+      ...cue,
+      speakerIds: replaced,
+      primarySpeakerId:
+        cue.primarySpeakerId === sourceId ? targetId : cue.primarySpeakerId,
+    });
+  });
+}
+
+export function speakerListsEqual(
+  left: readonly SpeakerInfo[],
+  right: readonly SpeakerInfo[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((speaker, index) => {
+      const other = right[index];
+      return (
+        speaker.id === other?.id &&
+        speaker.displayName === other.displayName &&
+        speaker.color === other.color &&
+        Boolean(speaker.autoName) === Boolean(other.autoName)
+      );
+    })
+  );
+}
