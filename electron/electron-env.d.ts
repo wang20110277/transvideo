@@ -25,6 +25,11 @@ declare namespace NodeJS {
 }
 
 // Used in Renderer process, expose in `preload.ts`
+interface SmartsubBridge {
+  getPathForFile(file: File): string
+}
+
 interface Window {
   ipcRenderer: import('electron').IpcRenderer
+  smartsubBridge: SmartsubBridge
 }
