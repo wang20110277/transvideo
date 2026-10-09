@@ -206,10 +206,17 @@ function assertSmartsubResources(buildOutputDir, arch) {
 
   const resourcesDir =
     buildTarget === 'mac' ? join(unpackedAppDir, 'Contents', 'Resources') : join(unpackedAppDir, 'resources');
+  // whisper 原生 addon:转写主路径必需,构建期由 scripts/smartsub/fetch-whisper-addon.mjs 落地。
+  // 按平台产物:darwin x64 / win x64 / linux x64 均为 addon.node;darwin arm64 另有 addon.coreml.node。
+  const addonChecks = [join(resourcesDir, 'extraResources', 'smartsub', 'addons', 'addon.node')];
+  if (arch === 'arm64') {
+    addonChecks.push(join(resourcesDir, 'extraResources', 'smartsub', 'addons', 'addon.coreml.node'));
+  }
   const checks = [
     join(resourcesDir, 'extraResources', 'smartsub', 'sherpa'),
     join(resourcesDir, 'extraResources', 'smartsub', 'ggml-silero-v6.2.0.bin'),
     join(resourcesDir, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static'),
+    ...addonChecks,
   ];
   const missing = checks.filter((p) => !existsSync(p));
   if (missing.length) {
@@ -245,6 +252,48 @@ function assertSmartsubMainBundle() {
   }
 }
 
+/**
+ * smartsub 原生二进制构建期 fetch:在 electron-vite build 之后、electron-builder 打包之前
+ * 对 host 平台拉取 whisper addon + sherpa native 到 smartsub-resources/,再经 extraResources
+ * 打进包内。whisper addon 是转写主路径必需(缺它打包断言必失败),sherpa native 是本地
+ * sherpa 引擎(funasr/qwen/parakeet)依赖、非内置 whisper 路径,上游仅 GitHub 单源无镜像回退。
+ */
+function fetchSmartsubNativeBinaries() {
+  const whisperFetch = resolve(projectRoot, 'scripts', 'smartsub', 'fetch-whisper-addon.mjs');
+  const sherpaFetch = resolve(projectRoot, 'scripts', 'smartsub', 'fetch-sherpa-native.mjs');
+
+  const whisper = spawnSync(process.execPath, [whisperFetch], {
+    cwd: projectRoot,
+    env,
+    stdio: 'inherit',
+  });
+  if (whisper.error || (whisper.status ?? 1) !== 0) {
+    console.error(
+      '[smartsub] whisper addon 拉取失败(转写主路径必需,打包将中止)。\n' +
+        '  手动补齐:node scripts/smartsub/fetch-whisper-addon.mjs\n' +
+        '  镜像源  :--source=gitcode 或 --source=ghproxy(或环境变量 ADDON_DOWNLOAD_SOURCE=gitcode)\n' +
+        '  产物    :smartsub-resources/addons/addon.node(darwin-arm64 另含 addon.coreml.node)\n' +
+        '  源仓库  :GitHub buxuku/whisper.cpp release `latest` / GitCode buxuku1/whisper.node release `latest`',
+    );
+    process.exit(whisper.status ?? 1);
+  }
+
+  // sherpa native:非转写主路径,失败仅告警不阻断打包(上游无镜像回退,网络受限环境常见)。
+  const sherpa = spawnSync(process.execPath, [sherpaFetch], {
+    cwd: projectRoot,
+    env,
+    stdio: 'inherit',
+  });
+  if (sherpa.error || (sherpa.status ?? 1) !== 0) {
+    console.warn(
+      '[smartsub] 警告:sherpa native 拉取失败(不影响内置 whisper 转写主路径)。\n' +
+        '  手动补齐:node scripts/smartsub/fetch-sherpa-native.mjs\n' +
+        '  产物    :smartsub-resources/sherpa/native/<platformKey>/sherpa-onnx.node\n' +
+        '  源仓库  :GitHub buxuku/smartsub-py-engine release `sherpa-libs-latest`',
+    );
+  }
+}
+
 function buildForArch(arch) {
   const stagingBuildOutputDir = resolveStagingBuildOutputDir(arch);
   const finalBuildOutputDir = resolveFinalBuildOutputDir(arch);
@@ -262,6 +311,9 @@ if (shouldGenerateIcons()) {
 const buildArchs = resolveBuildArchs();
 
 run('npx', ['electron-vite', 'build']);
+
+// smartsub 原生二进制(whisper addon 必需 / sherpa native 次要)须在打包前就位
+fetchSmartsubNativeBinaries();
 
 for (const arch of buildArchs) {
   buildForArch(arch);

@@ -62,6 +62,10 @@ S级*
 *修复方案*
 *分析报告*
 
+# SmartSub 原生二进制:构建期由 scripts/smartsub/fetch-*.mjs 拉取,不入库(与上游一致)
+smartsub-resources/addons/*.node
+smartsub-resources/sherpa/native/
+
 # Local notes / screenshots
 02260305图片合并生成修复.md
 20260226101148.png
