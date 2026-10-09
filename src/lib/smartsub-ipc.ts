@@ -18,6 +18,8 @@ export const smartsubIpc = {
   getEngineStatus: () => ipc().invoke('get-engine-status'),
   submitTask: (payload: unknown) => ipc().invoke('submitTask', payload),
   revealPath: (p: string) => ipc().invoke('smartsub:reveal-path', p),
+  /** 烧录字体清单(树内 subtitleMerge:* 系通道,返回 {success, data:[{name, available, ...}]}) */
+  listFonts: () => ipc().invoke('subtitleMerge:listFonts'),
   /** SmartSub 统一日志/进度推送通道(messageHandler.sendMessage) */
   onMessage: (cb: (message: string) => void) => {
     const listener = (_e: unknown, message: string) => cb(message);

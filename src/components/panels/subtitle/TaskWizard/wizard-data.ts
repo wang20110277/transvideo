@@ -165,14 +165,13 @@ export interface FontOption {
 }
 
 /**
- * 烧录字体清单:树内通道 subtitleMerge:listFonts(CHANNELS.md 已登记;
- * 返回 {success,data:[{name,available,...}]},data 含平台已知字体 + 已安装字体族)。
- * 经 window.ipcRenderer 直调:smartsubIpc wrapper(Task 8)未含该通道且本任务
- * 禁改 wrapper;后续任务若扩 wrapper,应把此处收回统一出口。
+ * 烧录字体清单:smartsubIpc.listFonts(树内通道 subtitleMerge:listFonts,
+ * CHANNELS.md 已登记;返回 {success,data:[{name,available,...}]},
+ * data 含平台已知字体 + 已安装字体族),经 wrapper 统一出口调用。
  */
 export async function loadFontOptions(): Promise<FontOption[]> {
   try {
-    const resp = await window.ipcRenderer?.invoke("subtitleMerge:listFonts");
+    const resp = await smartsubIpc.listFonts();
     const data = (resp as { data?: unknown } | null | undefined)?.data;
     if (!Array.isArray(data)) return [];
     return data.flatMap((item) => {
