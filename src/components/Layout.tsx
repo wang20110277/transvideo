@@ -25,6 +25,7 @@ import { MediaView } from "@/components/panels/media";
 import { EditorView } from "@/components/panels/editor/EditorView";
 import { SettingsPanel } from "@/components/panels/SettingsPanel";
 import { ExportView } from "@/components/panels/export";
+import { SubtitleStudioPanel } from "@/components/panels/subtitle/SubtitleStudioPanel";
 import { OverviewPanel } from "@/components/panels/overview";
 import { AssetsView } from "@/components/panels/assets";
 
@@ -45,7 +46,7 @@ export function Layout() {
 
   // Full-screen views (no resizable panels)
   // 这些板块有自己的多栏布局，不需要全局的预览和属性面板
-  const fullScreenTabs = ["export", "settings", "overview", "script", "characters", "scenes", "freedom", "assets", "editor"];
+  const fullScreenTabs = ["export", "settings", "overview", "script", "characters", "scenes", "freedom", "assets", "editor", "subtitle"];
   if (fullScreenTabs.includes(activeTab)) {
     return (
       <div className="h-full flex bg-background">
@@ -55,6 +56,7 @@ export function Layout() {
           {/* 面板占 ProjectHeader 之外的剩余空间；面板自身用 h-full 时不再溢出被裁 */}
           <div className="flex-1 min-h-0 flex flex-col">
             {activeTab === "export" && <ExportView />}
+            {activeTab === "subtitle" && <SubtitleStudioPanel />}
             {activeTab === "settings" && <SettingsPanel />}
             {activeTab === "overview" && <OverviewPanel />}
             {activeTab === "script" && <ScriptView />}
