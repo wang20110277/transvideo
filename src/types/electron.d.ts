@@ -13,6 +13,10 @@ declare global {
       send: (channel: string, ...args: unknown[]) => void;
       invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
     };
+    /** SmartSub bridge(electron/preload.ts 注入;File → 绝对路径) */
+    smartsubBridge?: {
+      getPathForFile: (file: File) => string;
+    };
     imageStorage?: {
       saveImage: (url: string, category: string, filename: string) => Promise<{ success: boolean; localPath?: string; error?: string }>;
       getImagePath: (localPath: string) => Promise<string | null>;

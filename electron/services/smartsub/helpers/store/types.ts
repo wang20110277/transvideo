@@ -1,0 +1,223 @@
+import { Provider, CustomParameterConfig } from '../../types/provider';
+import type { AsrProvider } from '../../types/asrProvider';
+import type { TtsProvider } from '../../types/ttsProvider';
+import type { ClonedVoice } from '../../types/voiceClone';
+import { ProofreadHistory, ProofreadTask } from '../../types/proofread';
+import { IFiles, TaskProject } from '../../types';
+import { WorkItem } from '../../types/workItem';
+import type { TranscriptionEngine } from '../../types/engine';
+import {
+  GpuMode,
+  MacAccelMode,
+  AddonLoadResultInfo,
+  AddonLoadHistoryEntry,
+} from '../../types/addon';
+import type { DownloadEndpointConfig } from '../../types/downloadConfig';
+import type { CookieProfileMeta } from '../../types/download';
+import type {
+  MergeOutputMode,
+  VideoQuality,
+  EncoderMode,
+  UserStylePreset,
+} from '../../types/subtitleMerge';
+import type { TaskRecipe } from '../../types/recipe';
+import type { Glossary } from '../../types/glossary';
+import type { CustomLanguage } from '../../types/language';
+
+export type LogEntry = {
+  timestamp: number;
+  message: string;
+  type?: 'info' | 'error' | 'warning';
+  /** 任务工程日志归属；系统日志（updater 等）无此字段 */
+  projectId?: string;
+};
+
+export type StoreType = {
+  translationProviders: Provider[];
+  /** 云端听写（在线 ASR）服务商实例列表（多实例，含凭据）。缺省未定义时按 [] 处理。 */
+  asrProviders?: AsrProvider[];
+  /** 云端配音（TTS）服务商实例列表（语义对齐 asrProviders）。缺省未定义时按 [] 处理。 */
+  ttsProviders?: TtsProvider[];
+  /** 用户克隆音色（我的音色）列表。缺省未定义时按 [] 处理。 */
+  clonedVoices?: ClonedVoice[];
+  userConfig: Record<string, any>;
+  settings: {
+    whisperCommand: string;
+    language: string;
+    /** User-defined language codes shown alongside the built-in task languages. */
+    customLanguages?: CustomLanguage[];
+    useLocalWhisper: boolean;
+    builtinWhisperCommand: string;
+    useCuda: boolean;
+    /** GPU 加速模式（取代 useCuda；useCuda 保留仅为回滚安全；仅 win/linux 生效） */
+    gpuMode?: GpuMode;
+    /**
+     * NVIDIA GPU UUID selected for CUDA engines. Empty/undefined keeps the
+     * system default. UUID is machine-local and intentionally not exported.
+     */
+    selectedCudaDevice?: string;
+    /** gpuMode 迁移一次性通知标记：false=待通知，true=已通知 */
+    gpuMigrationNotified?: boolean;
+    /** macOS(Apple Silicon) 转写加速方式：auto=优先 CoreML（缺省），metal=始终 Metal */
+    macAccelMode?: MacAccelMode;
+    /**
+     * 统一存储根目录（Issue #388）。设置后 6 个模型目录与临时目录按
+     * 「引擎单独覆盖 > storageRoot/<既有默认子目录名> > userData 默认」解析，
+     * 见 storagePaths.ts。空串/undefined = 未设置。
+     */
+    storageRoot?: string;
+    /**
+     * whisper.cpp(ggml) 模型目录单独覆盖；缺省跟随 storageRoot / userData。
+     * 注意：曾在 store defaults 中写死绝对默认路径（被动持久化），启动时对
+     * 等于出厂默认的持久化值做归一化删除（ipcStoreHandlers）。
+     */
+    modelsPath?: string;
+    maxContext?: number;
+    useCustomTempDir?: boolean;
+    customTempDir?: string;
+    useVAD: boolean;
+    checkUpdateOnStartup: boolean;
+    preventSleepDuringTask: boolean;
+    vadThreshold: number;
+    vadMinSpeechDuration: number;
+    vadMinSilenceDuration: number;
+    vadMaxSpeechDuration: number;
+    vadSpeechPad: number;
+    vadSamplesOverlap: number;
+    /** 抗幻觉/抗重复：开启后断开上文条件并抑制重复（builtin: max_context=0；faster-whisper: condition_on_previous_text=false + no_repeat_ngram/repetition_penalty 等）。默认关闭，按需开启。 */
+    reduceRepetition?: boolean;
+    /*
+     * 字幕效果档位（SubtitleOutcome）是**任务级**配置，存在 userConfig.subtitleOutcome（formData），
+     * 与 maxContext/useVAD/reduceRepetition 同源、按「上次使用」记忆，不在全局 settings 里。
+     * 把这些底层旋钮收敛为意图单选，按引擎差异化派生底层参数；取值与映射见
+     * main/helpers/engines/outcomePresets.ts。
+     */
+    /**
+     * 任务默认引擎+模型的"上次使用"记忆（全局单条，三者作为整体，避免引擎/模型失配）。
+     * 云引擎(engine==='cloud')时 asrProviderId 标识具体服务商实例。
+     */
+    lastUsedTranscription?: {
+      engine: TranscriptionEngine;
+      model?: string;
+      asrProviderId?: string;
+    };
+    /**
+     * 通读摘要提示词用户稿。空 / 缺省回落 types/summaryPrompt.ts 的出厂模板，
+     * 不做首启动写死，避免锁死后续出厂更新。
+     */
+    summaryPrompt?: string;
+    fasterWhisperDevice?: 'auto' | 'cpu' | 'cuda';
+    fasterWhisperComputeType?: string;
+    fasterWhisperModelsPath?: string;
+    /** funasr 模型根目录覆盖；缺省回退 userData/models/funasr */
+    funasrModelsPath?: string;
+    /** qwen 模型根目录覆盖；缺省回退 userData/models/qwen */
+    qwenModelsPath?: string;
+    /** fireRed 模型根目录覆盖；缺省回退 userData/models/firered */
+    fireRedModelsPath?: string;
+    /** NVIDIA Parakeet 模型根目录覆盖；缺省回退 userData/models/parakeet */
+    parakeetModelsPath?: string;
+    /** TTS(配音) 模型根目录覆盖；缺省回退 userData/models/tts */
+    ttsModelsPath?: string;
+    /** FunASR(SenseVoice via sherpa-onnx) 推理 provider；P1 仅 cpu 落地，cuda/coreml 预留 */
+    funasrProvider?: 'cpu' | 'cuda' | 'coreml';
+    /** FunASR 逆文本归一化（数字/标点），默认开启 */
+    funasrUseItn?: boolean;
+    /** FunASR 解码线程数，默认 2 */
+    funasrNumThreads?: number;
+    /** Qwen3-ASR(sherpa-onnx) 推理 provider；P2 仅 cpu 落地，cuda 预留 */
+    qwenProvider?: 'cpu' | 'cuda';
+    /** Qwen3-ASR 解码线程数，默认 2 */
+    qwenNumThreads?: number;
+    /** Qwen3-ASR 最大总序列长度，默认 512（对齐 sherpa 上游） */
+    qwenMaxTotalLen?: number;
+    /** Qwen3-ASR 单段最大新生成 token 数，默认 128 */
+    qwenMaxNewTokens?: number;
+    /** Qwen3-ASR 采样温度，默认 1e-6（近贪心，确定性） */
+    qwenTemperature?: number;
+    /** Qwen3-ASR top-p 采样阈值，默认 0.8 */
+    qwenTopP?: number;
+    /** Qwen3-ASR 随机种子，默认 42 */
+    qwenSeed?: number;
+    /** FireRedASR-AED(sherpa-onnx) 推理 provider；本期仅 cpu 落地，cuda 预留 */
+    fireRedProvider?: 'cpu' | 'cuda';
+    /** FireRedASR-AED 解码线程数，默认 2 */
+    fireRedNumThreads?: number;
+    /** NVIDIA Parakeet TDT(sherpa-onnx) 推理 provider */
+    parakeetProvider?: 'cpu' | 'cuda';
+    /** NVIDIA Parakeet TDT 解码线程数，默认 2 */
+    parakeetNumThreads?: number;
+    /** 全局网络代理模式（none=直连；custom=手动 URL） */
+    proxyMode?: 'none' | 'custom';
+    /** custom 模式的代理 URL，如 http://user:pass@host:port */
+    proxyUrl?: string;
+    /** 可选 NO_PROXY 列表（逗号分隔），默认 localhost,127.0.0.1 */
+    proxyNoProxy?: string;
+    /** 下载源端点（镜像/代理）用户覆盖；缺省字段走 DEFAULT_DOWNLOAD_ENDPOINTS。 */
+    downloadEndpoints?: Partial<DownloadEndpointConfig>;
+    /** 任务列表视图：list=列表，grid=网格（全局统一，跨重启保留） */
+    taskViewMode?: 'list' | 'grid';
+    /** 在线视频下载：保存目录（记忆上次使用值） */
+    videoDownloadSavePath?: string;
+    /** 在线视频下载：清晰度档位 */
+    videoDownloadQuality?: 'best' | '1080p' | '720p';
+    /** 在线视频下载：引擎选择（auto=按域名路由） */
+    videoDownloadEngine?: 'auto' | 'yt-dlp' | 'lux';
+    /** 在线视频下载：并发数（1-5，默认 2） */
+    videoDownloadConcurrency?: number;
+    /** 在线视频下载：站点 Cookie 档案元数据（内容单独落盘 userData/downloader-cookies/） */
+    videoDownloadCookieProfiles?: CookieProfileMeta[];
+    /** 关闭窗口行为：smart=有任务转后台/空闲退出，background=始终后台，quit=始终退出（仅 macOS 生效，Win/Linux 固定兜底） */
+    closeAction?: 'smart' | 'background' | 'quit';
+    /** 首次「转入后台」提示是否已展示（勾「不再提示」后置 true） */
+    closeHintShown?: boolean;
+    /** 云端听写「上传第三方」隐私确认：用户勾「不再提醒」后置 true，跳过后续开跑确认。 */
+    cloudUploadConsent?: boolean;
+  };
+  providerVersion?: number;
+  lastAddonLoadResult?: AddonLoadResultInfo;
+  addonLoadHistory?: AddonLoadHistoryEntry[];
+  /** 已完成过 CoreML 首次编译（成功跑完一次转写）的模型名，用于「首次使用耗时」提示去重 */
+  coremlCompiledModels?: string[];
+  customParameters?: Record<string, CustomParameterConfig>;
+  proofreadHistories?: ProofreadHistory[]; // 旧版，保留兼容
+  proofreadTasks?: ProofreadTask[]; // 新版批量任务
+  /** 统一工作项（P19 WorkItem） */
+  workItems?: WorkItem[];
+  workItemsMigrationVersion?: number;
+  /** 旧版扁平任务列表（仅保留用于迁移到 taskProjects） */
+  tasks?: IFiles[];
+  /** 任务工程列表（任务维度，跨重启保留） */
+  taskProjects?: TaskProject[];
+  /**
+   * 讯飞录音转写大模型进行中订单（跨会话续查）：
+   * 键=`sha1(压缩音频):服务商实例id:语种档位`；重启后重跑同任务跳过上传直接续查。
+   * 订单完结/失效即删；写入超 72h 惰性过期（服务端结果保留约 5 天）。
+   */
+  xfyunPendingOrders?: Record<
+    string,
+    { orderId: string; signatureRandom: string; createdAt: number }
+  >;
+  /**
+   * Gladia 进行中转写任务（跨会话续查，语义对齐 xfyunPendingOrders）：
+   * 键=`sha1(压缩音频):服务商实例id:模型:语言`；任务完结/失效即删，写入超 72h 惰性过期。
+   */
+  gladiaPendingJobs?: Record<string, { id: string; createdAt: number }>;
+  /**
+   * 合成页输出偏好（跨重启记忆）。encoderMode 持久化为 hardware 但本会话
+   * 探测不可用时，UI 回落 CPU 显示且不改写存储值（换回有硬件的环境自动恢复）。
+   */
+  mergePreferences?: {
+    softContainer?: 'mkv' | 'mp4';
+    outputMode?: MergeOutputMode;
+    videoQuality?: VideoQuality;
+    encoderMode?: EncoderMode;
+  };
+  /** 用户保存的字幕样式预设（合成工作台「我的样式」，任务向导样式选择共用） */
+  mergeStylePresets?: UserStylePreset[];
+  /** 用户任务配方（内置配方为 renderer 代码常量，不落库） */
+  taskRecipes?: TaskRecipe[];
+  /** 全局翻译词库；按 order 排序，所有启用词库自动供 AI 翻译/优化读取。 */
+  glossaries?: Glossary[];
+  [key: string]: any;
+};

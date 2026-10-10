@@ -1,0 +1,268 @@
+/**
+ * Integration Tests for OpenAI Service with Parameter Processor
+ *
+ * Tests the integration between the OpenAI service and the Parameter Processor,
+ * ensuring backward compatibility and proper parameter application.
+ */
+
+import { ParameterProcessor } from '../../../main/helpers/parameterProcessor';
+
+// Mock OpenAI to avoid actual API calls
+jest.mock('openai', () => {
+  return {
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
+      chat: {
+        completions: {
+          create: jest.fn().mockResolvedValue({
+            choices: [
+              {
+                message: {
+                  content: '{"translation": "test result"}',
+                },
+              },
+            ],
+          }),
+        },
+      },
+    })),
+  };
+});
+
+// Since we can't easily import the functions due to the complex module structure,
+// let's create a simplified test that focuses on the parameter processing logic
+
+describe('OpenAI Service Integration with Parameter Processor', () => {
+  // Test the parameter processing logic directly
+  describe('Parameter Processing Integration', () => {
+    it('should let explicit custom parameters override thinking switch defaults', () => {
+      const qwenProvider = {
+        id: 'qwen',
+        name: 'Qwen Provider',
+        type: 'qwen',
+        isAi: true,
+        apiKey: 'test-key',
+        apiUrl: 'https://dashscope.aliyuncs.com',
+        modelName: 'qwen-turbo',
+        customParameters: {
+          headerParameters: {},
+          bodyParameters: {
+            // 用户显式配置优先于思考开关派生值（openspec: ai-thinking-mode-control D3）
+            enable_thinking: true,
+            temperature: 0.8,
+          },
+          configVersion: '1.0.0',
+          lastModified: Date.now(),
+        },
+      };
+
+      // 思考开关（默认关）派生的 enable_thinking: false 作为 baseParams 传入
+      const result = ParameterProcessor.processCustomParameters(qwenProvider, {
+        enable_thinking: false,
+      });
+
+      // 用户显式配置胜出，qwen 硬编码块已移除
+      expect(result.body.enable_thinking).toBe(true);
+      expect(result.body.temperature).toBe(0.8); // Custom parameter should remain
+    });
+
+    it('should process custom header parameters', () => {
+      const providerWithHeaders = {
+        id: 'custom-provider',
+        name: 'Custom Provider',
+        type: 'custom',
+        isAi: true,
+        apiKey: 'test-key',
+        apiUrl: 'https://api.custom.com',
+        modelName: 'custom-model',
+        customParameters: {
+          headerParameters: {
+            'X-Custom-Auth': 'Bearer ${API_KEY}',
+            'X-Model-Version': '${MODEL_NAME}-v1',
+          },
+          bodyParameters: {
+            temperature: 0.7,
+            max_tokens: 1500,
+          },
+          configVersion: '1.0.0',
+          lastModified: Date.now(),
+        },
+      };
+
+      const result = ParameterProcessor.processCustomParameters(
+        providerWithHeaders,
+        {},
+      );
+
+      // Check header processing
+      expect(result.headers['X-Custom-Auth']).toBe('Bearer test-key');
+      expect(result.headers['X-Model-Version']).toBe('custom-model-v1');
+
+      // Check body parameters
+      expect(result.body.temperature).toBe(0.7);
+      expect(result.body.max_tokens).toBe(1500);
+    });
+
+    it('should handle provider without custom parameters', () => {
+      const simpleProvider = {
+        id: 'simple',
+        name: 'Simple Provider',
+        type: 'simple',
+        isAi: true,
+        apiKey: 'key',
+        apiUrl: 'url',
+        modelName: 'model',
+      };
+
+      const result = ParameterProcessor.processCustomParameters(
+        simpleProvider,
+        {},
+      );
+
+      expect(Object.keys(result.headers)).toHaveLength(0);
+      expect(result.appliedParameters).toHaveLength(0);
+      expect(result.validationErrors).toHaveLength(0);
+    });
+
+    it('should validate parameter types and ranges', () => {
+      const providerWithInvalidParams = {
+        id: 'test',
+        name: 'Test Provider',
+        type: 'test',
+        isAi: true,
+        apiKey: 'key',
+        apiUrl: 'url',
+        modelName: 'model',
+        customParameters: {
+          headerParameters: {},
+          bodyParameters: {
+            temperature: 5.0, // Invalid range (should be 0.0-2.0)
+            max_tokens: 'invalid', // Invalid type (should be number)
+            stream: 'true', // Valid (string to boolean conversion)
+          },
+          configVersion: '1.0.0',
+          lastModified: Date.now(),
+        },
+      };
+
+      const result = ParameterProcessor.processCustomParameters(
+        providerWithInvalidParams,
+        {},
+      );
+
+      // Should have validation errors for invalid parameters
+      expect(result.validationErrors.length).toBeGreaterThan(0);
+
+      // Should skip invalid parameters
+      expect(result.skippedParameters.length).toBeGreaterThan(0);
+
+      // Should convert valid string to boolean
+      expect(result.body.stream).toBe(true);
+    });
+
+    it('should handle template variable substitution', () => {
+      const providerWithTemplates = {
+        id: 'template-provider',
+        name: 'Template Provider',
+        type: 'custom',
+        isAi: true,
+        apiKey: 'secret-key',
+        apiUrl: 'https://api.example.com',
+        modelName: 'gpt-4',
+        customParameters: {
+          headerParameters: {
+            Authorization: 'Bearer ${API_KEY}',
+            'X-Base-URL': '${BASE_URL}/v1',
+            'X-Model': '${MODEL_NAME}',
+          },
+          bodyParameters: {
+            custom_field: 'Using ${MODEL_NAME} model',
+          },
+          configVersion: '1.0.0',
+          lastModified: Date.now(),
+        },
+      };
+
+      const result = ParameterProcessor.processCustomParameters(
+        providerWithTemplates,
+        {},
+      );
+
+      // Check template substitution in headers
+      expect(result.headers['Authorization']).toBe('Bearer secret-key');
+      expect(result.headers['X-Base-URL']).toBe('https://api.example.com/v1');
+      expect(result.headers['X-Model']).toBe('gpt-4');
+
+      // Body parameters remain literal; header templates supply credentials.
+      expect(result.body.custom_field).toBe('Using ${MODEL_NAME} model');
+    });
+
+    it('should merge base parameters with custom parameters', () => {
+      const provider = {
+        id: 'merge-test',
+        name: 'Merge Test Provider',
+        type: 'custom',
+        isAi: true,
+        apiKey: 'key',
+        apiUrl: 'url',
+        modelName: 'model',
+        customParameters: {
+          headerParameters: {},
+          bodyParameters: {
+            temperature: 0.9,
+            custom_param: 'custom-value',
+          },
+          configVersion: '1.0.0',
+          lastModified: Date.now(),
+        },
+      };
+
+      const baseParams = {
+        existing_param: 'base-value',
+        temperature: 0.3, // Should be overridden by custom parameter
+      };
+
+      const result = ParameterProcessor.processCustomParameters(
+        provider,
+        baseParams,
+      );
+
+      expect(result.body.existing_param).toBe('base-value'); // Base param preserved
+      expect(result.body.temperature).toBe(0.9); // Custom param applied
+      expect(result.body.custom_param).toBe('custom-value'); // Custom param added
+    });
+  });
+
+  // Test the conversion helper function
+  describe('Provider Type Conversion', () => {
+    it('should convert OpenAIProvider to ExtendedProvider format', () => {
+      // This tests the conceptual conversion that would happen in the service
+      const openAIProvider = {
+        apiUrl: 'https://api.openai.com',
+        apiKey: 'sk-test',
+        modelName: 'gpt-4',
+        id: 'openai',
+        providerType: 'openai',
+      };
+
+      // Simulate the conversion logic
+      const extendedProvider = {
+        id: openAIProvider.id || 'unknown',
+        name: openAIProvider.id || 'Unknown Provider',
+        type: openAIProvider.providerType || 'openai',
+        isAi: true,
+        apiKey: openAIProvider.apiKey,
+        apiUrl: openAIProvider.apiUrl,
+        modelName: openAIProvider.modelName,
+        ...openAIProvider,
+      };
+
+      expect(extendedProvider.id).toBe('openai');
+      expect(extendedProvider.name).toBe('openai');
+      expect(extendedProvider.type).toBe('openai');
+      expect(extendedProvider.isAi).toBe(true);
+      expect(extendedProvider.apiKey).toBe('sk-test');
+      expect(extendedProvider.modelName).toBe('gpt-4');
+    });
+  });
+});

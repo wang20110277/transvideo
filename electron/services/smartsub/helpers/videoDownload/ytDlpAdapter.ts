@@ -1,0 +1,185 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import type {
+  DownloadEntryMeta,
+  DownloadQuality,
+} from '../../types/download';
+import {
+  claimSubtitleFileNames,
+  parseYtDlpFilePathLine,
+  parseYtDlpPreflightJson,
+  parseYtDlpProgressLine,
+  tailForError,
+  YTDLP_FILEPATH_PREFIX,
+  YTDLP_PROGRESS_TEMPLATE,
+  YTDLP_SUBTITLES_PREFIX,
+  YTDLP_SUBTITLE_LANGS,
+  parseYtDlpSubtitlePaths,
+} from './parsers';
+import {
+  ffmpegLocation,
+  getProxyUrl,
+  runProcess,
+  type DownloadEngineAdapter,
+  type DownloadJobOptions,
+  type DownloadJobResult,
+  type PreflightOptions,
+} from './engineAdapter';
+
+const PREFLIGHT_TIMEOUT_MS = 45_000;
+
+/** 输出模板：标题 + 站点 id 保证唯一性；扩展名交给引擎（合流后可能变化） */
+const OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
+
+function qualityArgs(quality: DownloadQuality): string[] {
+  // -S res:N 为「偏好排序」：不满足档位时就近降档而非报错
+  if (quality === '1080p') return ['-S', 'res:1080'];
+  if (quality === '720p') return ['-S', 'res:720'];
+  return [];
+}
+
+function commonArgs(): string[] {
+  const args = ['--ignore-config', '--no-warnings', '--newline'];
+  const proxy = getProxyUrl();
+  if (proxy) args.push('--proxy', proxy);
+  return args;
+}
+
+/**
+ * Restrict recognition to requested_subtitles reported after conversion/move.
+ * Matching old files in the output directory are never implicitly claimed.
+ */
+async function claimReportedSubtitles(
+  videoPaths: string[],
+  reported: string[],
+): Promise<string[]> {
+  const claimed: string[] = [];
+  for (const videoPath of videoPaths) {
+    const dir = path.dirname(videoPath);
+    try {
+      const names = reported
+        .filter((file) => path.dirname(file) === dir)
+        .map((file) => path.basename(file));
+      for (const name of claimSubtitleFileNames(
+        path.basename(videoPath),
+        names,
+      )) {
+        const full = path.join(dir, name);
+        if (!claimed.includes(full) && (await fs.promises.stat(full)).isFile())
+          claimed.push(full);
+      }
+    } catch {
+      // 目录读取失败：跳过该视频的字幕认领
+    }
+  }
+  return claimed;
+}
+
+export const ytDlpAdapter: DownloadEngineAdapter = {
+  engine: 'yt-dlp',
+
+  async preflight(
+    binaryPath: string,
+    opts: PreflightOptions,
+  ): Promise<DownloadEntryMeta> {
+    const args = [
+      ...commonArgs(),
+      ...(opts.cookieFilePath ? ['--cookies', opts.cookieFilePath] : []),
+      '-J',
+      '--flat-playlist',
+      '--',
+      opts.url,
+    ];
+    const result = await runProcess(binaryPath, args, {
+      timeoutMs: opts.timeoutMs ?? PREFLIGHT_TIMEOUT_MS,
+    });
+    if (result.code !== 0) {
+      throw new Error(tailForError(result.stderr || result.stdout));
+    }
+    return parseYtDlpPreflightJson(result.stdout);
+  },
+
+  async download(
+    binaryPath: string,
+    opts: DownloadJobOptions,
+  ): Promise<DownloadJobResult> {
+    const args = [
+      ...commonArgs(),
+      ...(opts.cookieFilePath ? ['--cookies', opts.cookieFilePath] : []),
+      '-c',
+      '-P',
+      opts.savePath,
+      '-o',
+      OUTPUT_TEMPLATE,
+      '--ffmpeg-location',
+      ffmpegLocation(),
+      '--progress-template',
+      `download:${YTDLP_PROGRESS_TEMPLATE}`,
+      // --print 默认蕴含 simulate，必须显式关闭；after_move 才是合流/移动后的最终路径。
+      // %(filepath)j = JSON ASCII 转义：Windows 冻结版 yt-dlp 管道输出走 ANSI 代码页，
+      // 裸打印非 ASCII 文件名必乱码（解析函数注释有完整链路），ASCII 转义不受代码页影响
+      '--no-simulate',
+      '--print',
+      `after_move:${YTDLP_FILEPATH_PREFIX}%(filepath)j`,
+      '--print',
+      `after_move:${YTDLP_SUBTITLES_PREFIX}%(requested_subtitles)j`,
+      ...qualityArgs(opts.quality),
+      // 官方字幕直取：仅人工字幕（不开 --write-auto-subs），统一转 srt
+      // （依赖已注入的 --ffmpeg-location；转换失败 yt-dlp 保留原格式）
+      ...(opts.writeSubs
+        ? [
+            '--write-subs',
+            '--sub-langs',
+            YTDLP_SUBTITLE_LANGS,
+            '--convert-subs',
+            'srt',
+          ]
+        : []),
+      opts.expandPlaylist ? '--yes-playlist' : '--no-playlist',
+      '--',
+      opts.url,
+    ];
+
+    const outputPaths: string[] = [];
+    const reportedSubtitles: string[] = [];
+    let lineBuffer = '';
+    const handleStdout = (chunk: string) => {
+      lineBuffer += chunk;
+      const lines = lineBuffer.split(/\r?\n/);
+      lineBuffer = lines.pop() ?? '';
+      for (const line of lines) {
+        reportedSubtitles.push(...parseYtDlpSubtitlePaths(line));
+        const filePath = parseYtDlpFilePathLine(line);
+        if (filePath) {
+          outputPaths.push(filePath);
+          continue;
+        }
+        const progress = parseYtDlpProgressLine(line);
+        if (progress) opts.onProgress(progress);
+      }
+    };
+
+    const result = await runProcess(binaryPath, args, {
+      signal: opts.signal,
+      onStdout: handleStdout,
+    });
+    // flush 余留半行（进程结束时最后一行可能无换行）
+    if (lineBuffer) handleStdout('\n');
+
+    if (result.code !== 0) {
+      throw new Error(tailForError(result.stderr || result.stdout));
+    }
+    if (outputPaths.length === 0) {
+      throw new Error('yt-dlp finished without reporting output file');
+    }
+    if (!opts.writeSubs) return { outputPaths };
+    const subtitlePaths = await claimReportedSubtitles(
+      outputPaths,
+      reportedSubtitles,
+    );
+    return {
+      outputPaths,
+      ...(subtitlePaths.length ? { subtitlePaths } : {}),
+    };
+  },
+};

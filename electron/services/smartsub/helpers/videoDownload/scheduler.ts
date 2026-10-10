@@ -1,0 +1,712 @@
+import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import { logMessage, store } from '../storeManager';
+import { getWorkItemById, saveWorkItem } from '../workItemStore';
+import {
+  getDownloaderBinaryPath,
+  getInstalledEngines,
+} from '../downloaderManager';
+import { isDownloadableHttpUrl, routeEngines } from '../../types/download';
+import type {
+  DownloadConfigSnapshot,
+  DownloadEngineChoice,
+  DownloadEntry,
+  DownloadEntryMeta,
+  DownloadQuality,
+  DownloaderEngine,
+} from '../../types/download';
+import type { WorkItem, WorkItemStatus } from '../../types/workItem';
+import { isLikelyAuthError, isLikelyOutdatedEngineError } from './parsers';
+import {
+  cleanupCookieTempFile,
+  createCookieTempFile,
+  isCancelledError,
+  shutdownDownloaderProcesses,
+} from './engineAdapter';
+import { ytDlpAdapter } from './ytDlpAdapter';
+import { luxAdapter } from './luxAdapter';
+import type { DownloadEngineAdapter } from './engineAdapter';
+import {
+  resolveDownloadPipeline,
+  handoffDownloadEntry,
+  downloadPipelineKey,
+} from './pipeline';
+
+const ADAPTERS: Record<DownloaderEngine, DownloadEngineAdapter> = {
+  'yt-dlp': ytDlpAdapter,
+  lux: luxAdapter,
+};
+
+const CANCELLED_ERROR = 'CANCELLED';
+/** 进度事件节流：每条目 ≤2 次/秒 */
+const PROGRESS_EMIT_INTERVAL_MS = 500;
+
+export interface DownloadEntryEvent {
+  workItemId: string;
+  entry: DownloadEntry;
+}
+
+export interface DownloadSummaryEvent {
+  /** 有下载批次在执行 */
+  running: boolean;
+  /** 执行中条目数 */
+  activeCount: number;
+  /** 运行中批次的整体进度 0-100 */
+  progress: number;
+}
+
+type Emitter = (channel: string, ...args: unknown[]) => void;
+
+let emit: Emitter = () => {};
+
+export function setVideoDownloadEmitter(emitter: Emitter): void {
+  emit = emitter;
+}
+
+interface QueuedJob {
+  workItemId: string;
+  entryId: string;
+}
+
+interface BatchRuntime {
+  cancelled: boolean;
+  controllers: Map<string, AbortController>;
+}
+
+let queue: QueuedJob[] = [];
+const runtimes = new Map<string, BatchRuntime>();
+let activeCount = 0;
+const lastEmitAt = new Map<string, number>();
+
+function clampConcurrency(value: unknown): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(Math.max(Math.round(n), 1), 5);
+}
+
+function getConcurrency(): number {
+  try {
+    const value = (
+      store.get('settings') as { videoDownloadConcurrency?: number }
+    )?.videoDownloadConcurrency;
+    const clamped = clampConcurrency(value);
+    if (clamped !== null) return clamped;
+  } catch {
+    // fallthrough
+  }
+  return 2;
+}
+
+function ensureRuntime(workItemId: string): BatchRuntime {
+  let runtime = runtimes.get(workItemId);
+  if (!runtime) {
+    runtime = { cancelled: false, controllers: new Map() };
+    runtimes.set(workItemId, runtime);
+  }
+  return runtime;
+}
+
+/** 下载批次是否有执行/排队中的条目（外部忙判定：如更新引擎前检查） */
+export function isVideoDownloadBusy(): boolean {
+  return activeCount > 0 || queue.length > 0;
+}
+
+/**
+ * 应用退出：清空队列、中止全部执行中条目并终止引擎子进程（含临时 cookie 清理）。
+ * 不在此持久化批次状态——启动恢复会把 running 的下载任务标记 interrupted。
+ */
+export function shutdownVideoDownloads(): void {
+  queue = [];
+  runtimes.forEach((runtime) => {
+    runtime.cancelled = true;
+    runtime.controllers.forEach((controller) => controller.abort());
+  });
+  shutdownDownloaderProcesses();
+}
+
+function deriveStatus(entries: DownloadEntry[]): WorkItemStatus {
+  if (entries.some((e) => e.status === 'loading')) return 'running';
+  if (entries.some((e) => e.status === '')) return 'waiting';
+  return entries.some((e) => e.status === 'error') ? 'error' : 'done';
+}
+
+/** 以最新 store 状态为基线更新条目并派生任务状态（返回更新后的条目） */
+function updateEntry(
+  workItemId: string,
+  entryId: string,
+  patch: Partial<DownloadEntry>,
+  opts: {
+    deriveItemStatus?: boolean;
+    forceEmit?: boolean;
+    durable?: boolean;
+    artifacts?: WorkItem['artifacts'];
+  } = {},
+): DownloadEntry | null {
+  const item = getWorkItemById(workItemId);
+  if (!item || item.type !== 'download') return null;
+  const entries = (item.downloadEntries || []).map((entry) =>
+    entry.id === entryId ? { ...entry, ...patch } : entry,
+  );
+  const updated = entries.find((e) => e.id === entryId) || null;
+  const next: WorkItem = {
+    ...item,
+    downloadEntries: entries,
+    updatedAt: Date.now(),
+    ...(opts.artifacts ? { artifacts: opts.artifacts } : {}),
+  };
+  if (opts.deriveItemStatus) {
+    next.status = deriveStatus(entries);
+    if (next.status === 'done' || next.status === 'error') {
+      next.finishedAt = Date.now();
+    }
+  }
+  saveWorkItem(next, { durable: opts.durable });
+
+  if (updated) {
+    const now = Date.now();
+    const last = lastEmitAt.get(entryId) || 0;
+    if (opts.forceEmit || now - last >= PROGRESS_EMIT_INTERVAL_MS) {
+      lastEmitAt.set(entryId, now);
+      emit('videoDownload:entryChanged', {
+        workItemId,
+        entry: updated,
+      } satisfies DownloadEntryEvent);
+    }
+  }
+  emitSummary();
+  return updated;
+}
+
+function emitItemChanged(workItemId: string): void {
+  emit('videoDownload:itemChanged', { workItemId });
+  emitSummary();
+}
+
+let lastSummaryKey = '';
+
+function emitSummary(): void {
+  let total = 0;
+  let sum = 0;
+  let loading = 0;
+  runtimes.forEach((_runtime, id) => {
+    const item = getWorkItemById(id);
+    if (!item || item.type !== 'download') return;
+    if (item.status !== 'running' && item.status !== 'waiting') return;
+    for (const entry of item.downloadEntries || []) {
+      total += 1;
+      if (entry.status === 'done') sum += 100;
+      else sum += entry.progress || 0;
+      if (entry.status === 'loading') loading += 1;
+    }
+  });
+  const summary: DownloadSummaryEvent = {
+    running: loading > 0 || queue.length > 0,
+    activeCount: loading,
+    progress: total > 0 ? Math.round(sum / total) : 0,
+  };
+  // 摘要仅在内容变化时广播（状态栏 pill 消费，避免风暴）
+  const key = `${summary.running}|${summary.activeCount}|${summary.progress}`;
+  if (key === lastSummaryKey) return;
+  lastSummaryKey = key;
+  emit('videoDownload:summary', summary);
+}
+
+export interface StartDownloadPayload {
+  autoChain?: {
+    recipeId: string;
+    cloudUploadConsent?: boolean;
+    configKey: string;
+  };
+  name: string;
+  savePath: string;
+  quality: DownloadQuality;
+  engine: DownloadEngineChoice;
+  /** 同时下载官方字幕（缺省视为开启） */
+  writeSubs?: boolean;
+  /** 批次并发（1-5）；主进程在此持久化，避免依赖渲染层异步写设置的时序 */
+  concurrency?: number;
+  entries: Array<{
+    url: string;
+    meta?: DownloadEntryMeta;
+    expandPlaylist?: boolean;
+  }>;
+}
+
+/**
+ * 创建 download WorkItem 并入列。播放列表条目在此展开：
+ * 预检拿到 playlistItems 且用户确认展开 → 逐条建 entry；
+ * 未预检的播放列表 → 单 entry 交给引擎 --yes-playlist 兜底。
+ */
+export function startDownloadBatch(payload: StartDownloadPayload): WorkItem {
+  const autoChain = payload.autoChain
+    ? resolveDownloadPipeline(
+        payload.autoChain.recipeId,
+        payload.autoChain.cloudUploadConsent === true,
+      )
+    : undefined;
+  if (
+    autoChain &&
+    downloadPipelineKey(autoChain) !== payload.autoChain!.configKey
+  )
+    throw new Error('DOWNLOAD_PIPELINE_CONFIG_CHANGED');
+  if (!payload.savePath) throw new Error('savePath is required');
+  fs.mkdirSync(payload.savePath, { recursive: true });
+
+  const installed = getInstalledEngines();
+  if (installed.length === 0) {
+    throw new Error('No downloader engine installed');
+  }
+
+  const entries: DownloadEntry[] = [];
+  for (const input of payload.entries) {
+    // 边界校验：URL 会成为引擎命令行参数（lux 位置参数前无 `--`），仅放行 http(s)
+    if (!isDownloadableHttpUrl(input.url)) {
+      throw new Error(`Invalid download URL: ${String(input.url)}`);
+    }
+    const routed = routeEngines(input.url, payload.engine, installed);
+    const engine = routed[0] || installed[0];
+    if (input.expandPlaylist && input.meta?.playlistItems?.length) {
+      for (const item of input.meta.playlistItems) {
+        if (!isDownloadableHttpUrl(item.url)) {
+          throw new Error(`Invalid download URL: ${String(item.url)}`);
+        }
+        entries.push({
+          id: uuidv4(),
+          url: item.url,
+          engine,
+          status: '',
+          meta: item.title ? { title: item.title } : undefined,
+        });
+      }
+    } else {
+      entries.push({
+        id: uuidv4(),
+        url: input.url,
+        engine,
+        status: '',
+        meta: input.meta,
+        expandPlaylist: input.expandPlaylist,
+      });
+    }
+  }
+  if (entries.length === 0) throw new Error('No entries to download');
+
+  // 并发主写点在主进程：渲染层 fire-and-forget 写设置存在时序不确定性（design D6）
+  const concurrency = clampConcurrency(payload.concurrency) ?? getConcurrency();
+  try {
+    const settings = (store.get('settings') || {}) as Record<string, unknown>;
+    store.set('settings', {
+      ...settings,
+      videoDownloadConcurrency: concurrency,
+    });
+  } catch (error) {
+    logMessage(`persist download concurrency failed: ${error}`, 'warning');
+  }
+
+  const snapshot: DownloadConfigSnapshot = {
+    savePath: payload.savePath,
+    quality: payload.quality,
+    engine: payload.engine,
+    writeSubs: payload.writeSubs !== false,
+    concurrency,
+    ...(autoChain ? { autoChain } : {}),
+  };
+  const now = Date.now();
+  const item: WorkItem = {
+    id: uuidv4(),
+    name: payload.name,
+    type: 'download',
+    status: 'running',
+    createdAt: now,
+    updatedAt: now,
+    downloadEntries: entries,
+    configSnapshot: snapshot as unknown as Record<string, unknown>,
+    artifacts: [],
+  };
+  saveWorkItem(item, { durable: true });
+  ensureRuntime(item.id).cancelled = false;
+
+  queue.push(...entries.map((e) => ({ workItemId: item.id, entryId: e.id })));
+  emitItemChanged(item.id);
+  pump();
+  return item;
+}
+
+/** 中断批次「继续下载」：未完成（''）条目重新入列，断点由引擎续传 */
+export function resumeDownloadBatch(workItemId: string): boolean {
+  const item = getWorkItemById(workItemId);
+  if (!item || item.type !== 'download') return false;
+  const pending = (item.downloadEntries || []).filter((e) => e.status === '');
+  if (pending.length === 0) return false;
+
+  const runtime = ensureRuntime(workItemId);
+  runtime.cancelled = false;
+  saveWorkItem({ ...item, status: 'running', updatedAt: Date.now() });
+  const queued = new Set(
+    queue.filter((j) => j.workItemId === workItemId).map((j) => j.entryId),
+  );
+  queue.push(
+    ...pending
+      .filter((e) => !queued.has(e.id))
+      .map((e) => ({ workItemId, entryId: e.id })),
+  );
+  emitItemChanged(workItemId);
+  pump();
+  return true;
+}
+
+/** 失败条目重试；updateEngineFirst 由 IPC 层在重试前完成（本函数只重新入列） */
+export function retryDownloadEntry(
+  workItemId: string,
+  entryId: string,
+): boolean {
+  const item = getWorkItemById(workItemId);
+  if (!item || item.type !== 'download') return false;
+  const entry = (item.downloadEntries || []).find((e) => e.id === entryId);
+  if (!entry || entry.status === 'loading' || entry.status === 'done') {
+    return false;
+  }
+  ensureRuntime(workItemId).cancelled = false;
+  updateEntry(
+    workItemId,
+    entryId,
+    {
+      status: '',
+      error: undefined,
+      progress: 0,
+      speed: undefined,
+      eta: undefined,
+    },
+    { deriveItemStatus: true, forceEmit: true },
+  );
+  const alreadyQueued = queue.some(
+    (j) => j.workItemId === workItemId && j.entryId === entryId,
+  );
+  if (!alreadyQueued) queue.push({ workItemId, entryId });
+  const refreshed = getWorkItemById(workItemId);
+  if (refreshed && refreshed.status !== 'running') {
+    saveWorkItem({ ...refreshed, status: 'running', updatedAt: Date.now() });
+  }
+  emitItemChanged(workItemId);
+  pump();
+  return true;
+}
+
+/** 单条取消：排队中移除，执行中 abort；条目落错误态（可重试） */
+export function cancelDownloadEntry(
+  workItemId: string,
+  entryId: string,
+): boolean {
+  const entry = getWorkItemById(workItemId)?.downloadEntries?.find(
+    (item) => item.id === entryId,
+  );
+  if (!entry || (entry.status !== '' && entry.status !== 'loading'))
+    return false;
+  queue = queue.filter(
+    (j) => !(j.workItemId === workItemId && j.entryId === entryId),
+  );
+  const runtime = runtimes.get(workItemId);
+  const controller = runtime?.controllers.get(entryId);
+  if (controller) {
+    controller.abort();
+    // 状态推进由 runEntry 的取消分支完成
+    return true;
+  }
+  updateEntry(
+    workItemId,
+    entryId,
+    { status: 'error', error: CANCELLED_ERROR },
+    { deriveItemStatus: true, forceEmit: true },
+  );
+  emitItemChanged(workItemId);
+  return true;
+}
+
+/** 整批取消：清排队 + abort 执行中；未完成条目回到待下载，任务标记中断 */
+export function cancelDownloadBatch(workItemId: string): boolean {
+  const item = getWorkItemById(workItemId);
+  if (item && item.type !== 'download') return false;
+  const existingRuntime = runtimes.get(workItemId);
+  if (!item && !existingRuntime) return false;
+  if (
+    item &&
+    !(item.downloadEntries || []).some(
+      (entry) => entry.status === '' || entry.status === 'loading',
+    )
+  )
+    return false;
+  queue = queue.filter((j) => j.workItemId !== workItemId);
+  const runtime = ensureRuntime(workItemId);
+  runtime.cancelled = true;
+  runtime.controllers.forEach((controller) => controller.abort());
+  // Deletion commits the work item before stopping its outstanding transfers.
+  if (!item) return true;
+
+  const entries = (item.downloadEntries || []).map((entry) =>
+    entry.status === '' || entry.status === 'loading'
+      ? { ...entry, status: '' as const, speed: undefined, eta: undefined }
+      : entry,
+  );
+  saveWorkItem({
+    ...getWorkItemById(workItemId)!,
+    downloadEntries: entries,
+    status: 'interrupted',
+    updatedAt: Date.now(),
+  });
+  emitItemChanged(workItemId);
+  return true;
+}
+
+function takeNextJob(): QueuedJob | null {
+  while (queue.length > 0) {
+    const job = queue.shift()!;
+    const runtime = runtimes.get(job.workItemId);
+    if (runtime?.cancelled) continue;
+    const item = getWorkItemById(job.workItemId);
+    if (!item || item.type !== 'download') continue;
+    const entry = (item.downloadEntries || []).find(
+      (e) => e.id === job.entryId,
+    );
+    if (!entry || entry.status !== '') continue;
+    return job;
+  }
+  return null;
+}
+
+function pump(): void {
+  const concurrency = getConcurrency();
+  while (activeCount < concurrency) {
+    const job = takeNextJob();
+    if (!job) break;
+    activeCount += 1;
+    void runEntry(job)
+      .catch((error) => {
+        logMessage(`Download state update failed: ${error}`, 'error');
+      })
+      .finally(() => {
+        activeCount -= 1;
+        lastEmitAt.delete(job.entryId);
+        const runtime = runtimes.get(job.workItemId);
+        if (
+          !runtime?.controllers.size &&
+          !queue.some((pending) => pending.workItemId === job.workItemId)
+        )
+          runtimes.delete(job.workItemId);
+        pump();
+      });
+  }
+  emitSummary();
+}
+
+async function runEntry(job: QueuedJob): Promise<void> {
+  const { workItemId, entryId } = job;
+  const item = getWorkItemById(workItemId);
+  if (!item || item.type !== 'download') return;
+  const entry = (item.downloadEntries || []).find((e) => e.id === entryId);
+  if (!entry) return;
+  const snapshot = (item.configSnapshot ||
+    {}) as unknown as DownloadConfigSnapshot;
+
+  const installed = getInstalledEngines();
+  const engineOrder = routeEngines(
+    entry.url,
+    snapshot.engine || 'auto',
+    installed,
+  );
+  if (engineOrder.length === 0) {
+    updateEntry(
+      workItemId,
+      entryId,
+      { status: 'error', error: 'No downloader engine installed' },
+      { deriveItemStatus: true, forceEmit: true },
+    );
+    return;
+  }
+
+  const runtime = ensureRuntime(workItemId);
+  const controller = new AbortController();
+  runtime.controllers.set(entryId, controller);
+
+  const errors: string[] = [];
+  let succeeded = false;
+  let entryMeta = entry.meta;
+  // cookie 临时副本按条目 URL 匹配档案生成（与引擎无关），供本条目内所有引擎尝试
+  // （lux 元数据补拉 + 各引擎 download）共用，条目结束统一清理。
+  const cookieFilePath = createCookieTempFile(entry.url);
+  const hadCookie = Boolean(cookieFilePath);
+
+  try {
+    for (let i = 0; i < engineOrder.length; i++) {
+      const engine = engineOrder[i];
+      const binaryPath = getDownloaderBinaryPath(engine);
+      if (!binaryPath) {
+        errors.push(`${engine}: not installed`);
+        continue;
+      }
+      const adapter = ADAPTERS[engine];
+
+      updateEntry(
+        workItemId,
+        entryId,
+        {
+          status: 'loading',
+          engine,
+          progress: 0,
+          error: undefined,
+        },
+        { deriveItemStatus: true, forceEmit: true },
+      );
+
+      // 跳过预检的 lux 条目先补拉元数据：标题用于 -O 确定性命名（否则同域名批量
+      // 下载会撞名认领错文件）与 UI 展示，totalBytes 供进度降级估算。失败不阻断
+      // （lux 会按自身提取的标题命名，产物走目录 diff 认领）。
+      // 指定画质档位而流列表缺失（如 yt-dlp 预检后回退到 lux）时也补拉，供 -f 选流。
+      const needLuxStreams =
+        (snapshot.quality || 'best') !== 'best' &&
+        !entry.expandPlaylist &&
+        !entryMeta?.luxStreams;
+      if (
+        engine === 'lux' &&
+        (!entryMeta?.title || needLuxStreams) &&
+        !controller.signal.aborted
+      ) {
+        try {
+          const meta = await adapter.preflight(binaryPath, {
+            url: entry.url,
+            cookieFilePath,
+          });
+          entryMeta = { ...entryMeta, ...meta };
+          updateEntry(
+            workItemId,
+            entryId,
+            { meta: entryMeta },
+            { forceEmit: true },
+          );
+        } catch (error) {
+          logMessage(
+            `lux meta backfill failed (${entry.url}): ${error}`,
+            'warning',
+          );
+        }
+      }
+
+      let downloaded = false;
+      try {
+        const result = await adapter.download(binaryPath, {
+          url: entry.url,
+          savePath: snapshot.savePath,
+          quality: snapshot.quality || 'best',
+          expandPlaylist: entry.expandPlaylist,
+          // 旧批次快照无此字段，缺省按默认开（仅 yt-dlp 适配器消费）
+          writeSubs: snapshot.writeSubs !== false,
+          meta: entryMeta,
+          cookieFilePath,
+          signal: controller.signal,
+          onProgress: (p) => {
+            updateEntry(workItemId, entryId, {
+              progress: p.progress,
+              speed: p.speed,
+              eta: p.eta,
+            });
+          },
+        });
+        downloaded = true;
+        if (controller.signal.aborted) throw new Error(CANCELLED_ERROR);
+
+        // 产物登记：主路径进 entry，全部路径进 artifacts（播放列表兜底可能多个）；
+        // 同取字幕以 kind:'subtitle' 并列登记，路径去重保证重试/续传幂等
+        const subtitlePaths = result.subtitlePaths || [];
+        const latest = getWorkItemById(workItemId);
+        const artifacts = [...(latest?.artifacts || [])];
+        if (latest && latest.type === 'download') {
+          for (const outputPath of result.outputPaths) {
+            if (!artifacts.some((a) => a.path === outputPath)) {
+              artifacts.push({ kind: 'video', path: outputPath });
+            }
+          }
+          for (const subtitlePath of subtitlePaths) {
+            if (!artifacts.some((a) => a.path === subtitlePath)) {
+              artifacts.push({ kind: 'subtitle', path: subtitlePath });
+            }
+          }
+        }
+        updateEntry(
+          workItemId,
+          entryId,
+          {
+            status: 'done',
+            progress: 100,
+            speed: undefined,
+            eta: undefined,
+            outputPath: result.outputPaths[0],
+            outputPaths: result.outputPaths,
+            subtitlePaths,
+          },
+          { deriveItemStatus: true, forceEmit: true, durable: true, artifacts },
+        );
+        succeeded = true;
+        try {
+          handoffDownloadEntry(workItemId, entryId);
+        } catch (error) {
+          logMessage(`Download pipeline handoff deferred: ${error}`, 'error');
+        }
+        break;
+      } catch (error) {
+        if (isCancelledError(error) || controller.signal.aborted) {
+          // 整批取消：cancelDownloadBatch 已把条目回置''；单条取消：落 CANCELLED
+          if (!runtime.cancelled) {
+            updateEntry(
+              workItemId,
+              entryId,
+              {
+                status: 'error',
+                error: CANCELLED_ERROR,
+                speed: undefined,
+                eta: undefined,
+              },
+              { deriveItemStatus: true, forceEmit: true },
+            );
+          }
+          runtime.controllers.delete(entryId);
+          emitItemChanged(workItemId);
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`${engine}: ${message}`);
+        logMessage(
+          `videoDownload entry failed via ${engine} (${entry.url}): ${message}`,
+          'warning',
+        );
+        // A completed transfer must not fall back to another downloader on a disk error.
+        if (downloaded) break;
+      }
+    }
+  } finally {
+    cleanupCookieTempFile(cookieFilePath);
+    runtime.controllers.delete(entryId);
+  }
+
+  if (!succeeded) {
+    const combined = errors.join(' || ') || 'download failed';
+    // 前缀优先级：带 cookie 的鉴权失败大概率是 cookie 失效（而非引擎过旧），
+    // MAYBE_COOKIE_EXPIRED 优先于 MAYBE_OUTDATED。
+    let errorValue = combined;
+    if (hadCookie && isLikelyAuthError(combined)) {
+      errorValue = `MAYBE_COOKIE_EXPIRED::${combined}`;
+    } else if (isLikelyOutdatedEngineError(combined)) {
+      errorValue = `MAYBE_OUTDATED::${combined}`;
+    }
+    updateEntry(
+      workItemId,
+      entryId,
+      {
+        status: 'error',
+        error: errorValue,
+        speed: undefined,
+        eta: undefined,
+      },
+      { deriveItemStatus: true, forceEmit: true },
+    );
+  }
+  emitItemChanged(workItemId);
+}

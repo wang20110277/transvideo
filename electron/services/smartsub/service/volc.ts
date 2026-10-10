@@ -1,0 +1,72 @@
+import { Service } from '@volcengine/openapi';
+import { convertLanguageCode } from '../helpers/utils';
+import { throwIfSignalCancelled } from '../helpers/taskContext';
+import type { TranslationRequestOptions } from '../translate/types';
+
+let service;
+let fetchApi;
+let serviceCredentials: { accessKeyId: string; secretKey: string } | undefined;
+
+export default async function translate(
+  query,
+  proof,
+  sourceLanguage,
+  targetLanguage,
+  options?: TranslationRequestOptions,
+) {
+  throwIfSignalCancelled(options?.signal);
+  const { apiKey: accessKeyId, apiSecret: secretKey } = proof || {};
+  if (!accessKeyId || !secretKey) {
+    console.log('请先配置 API KEY 和 API SECRET');
+    throw new Error('missingKeyOrSecret');
+  }
+  const formatSourceLanguage = convertLanguageCode(sourceLanguage, 'volc');
+  const formatTargetLanguage = convertLanguageCode(targetLanguage, 'volc');
+  if (!formatSourceLanguage || !formatTargetLanguage) {
+    console.log('不支持的语言');
+    throw new Error('not supported language');
+  }
+  if (
+    !service ||
+    !fetchApi ||
+    serviceCredentials?.accessKeyId !== accessKeyId ||
+    serviceCredentials?.secretKey !== secretKey
+  ) {
+    service = new Service({
+      host: 'open.volcengineapi.com',
+      serviceName: 'translate',
+      region: 'cn-north-1',
+      accessKeyId,
+      secretKey,
+    });
+    fetchApi = service.createAPI('TranslateText', {
+      Version: '2020-06-01',
+      method: 'POST',
+      contentType: 'json',
+    });
+    serviceCredentials = { accessKeyId, secretKey };
+  }
+  const postBody = {
+    SourceLanguage:
+      formatSourceLanguage == 'auto' ? undefined : formatSourceLanguage,
+    TargetLanguage: formatTargetLanguage,
+    TextList: Array.isArray(query) ? query : [query],
+  };
+  try {
+    throwIfSignalCancelled(options?.signal);
+    const res = await fetchApi(postBody, {});
+    throwIfSignalCancelled(options?.signal);
+    if (!res?.TranslationList?.[0]?.Translation) {
+      throw new Error(res?.ResponseMetadata?.Error?.Code || '未知错误');
+    }
+
+    // 如果输入是数组，返回结果数组
+    if (Array.isArray(query)) {
+      return res.TranslationList.map((item) => item.Translation);
+    }
+    return res.TranslationList[0].Translation;
+  } catch (error) {
+    throwIfSignalCancelled(options?.signal);
+    throw new Error(error?.message || '未知错误');
+  }
+}

@@ -1,0 +1,1140 @@
+import { smartsubUserData } from '../helpers/smartsubPaths';
+import { dialogWindow } from '../automation/events';
+import { ipcMain } from '../automation/handlers';
+import { app, BrowserWindow, dialog, shell } from 'electron';
+import os from 'os';
+import { randomUUID } from 'crypto';
+import { getModelsInstalled, getPath, deleteModel } from './whisper';
+import {
+  getFasterWhisperModelsInstalled,
+  getFasterWhisperModelsPath,
+  toCt2CacheDirName,
+} from './modelCatalog';
+import {
+  validateModelLayout,
+  validateCt2ModelSnapshot,
+  CT2_REQUIRED_FILES,
+  CT2_IMPORT_SNAPSHOT_REV,
+} from './modelImport';
+import { commitStagedDirectory } from './download/atomicDirectoryInstall';
+import {
+  isRuntimeInstalled,
+  readEngineManifest,
+  getEngineDownloadUrl,
+  normalizePyEngineVariant,
+  getEngineDir,
+  getRuntimePythonPath,
+  getEngineSitePackages,
+  getEngineMainPy,
+  getPyEnginesRoot,
+} from './pythonRuntime/paths';
+import { getHfHost, getModelScopeBase } from './config/downloadConfig';
+import type { EngineStatus, PyEngineVariant } from '../types/engine';
+import { getModelDownloader } from './modelDownloader';
+import {
+  getCt2ProgressKey,
+  getFasterWhisperModelDownloader,
+  deleteCt2Model,
+} from './fasterWhisperModelDownloader';
+import {
+  getFunasrModelDownloader,
+  getFunasrProgressKey,
+} from './funasrModelDownloader';
+import {
+  FUNASR_MODELS,
+  FunasrModelId,
+  isFunasrModelInstalled,
+  isFunasrVadInstalled,
+  isFunasrReady,
+  deleteFunasrModel,
+  getInstalledFunasrAsrModels,
+  getFunasrModelsRoot,
+} from './funasrModelCatalog';
+import {
+  getQwenModelDownloader,
+  getQwenProgressKey,
+} from './qwenModelDownloader';
+import {
+  QWEN_MODELS,
+  QwenModelId,
+  QWEN_DEFAULT_MODEL_ID,
+  QwenModelSource,
+  isQwenModelInstalled,
+  isQwenVadInstalled,
+  isQwenReady,
+  deleteQwenModel,
+  getInstalledQwenModels,
+  getQwenModelsRoot,
+  getQwenArchiveUrl,
+  getQwenSupportedSources,
+  validateQwenModelLayout,
+} from './qwenModelCatalog';
+import {
+  getFireRedModelDownloader,
+  getFireRedProgressKey,
+} from './fireRedModelDownloader';
+import {
+  FIRERED_MODELS,
+  FireRedModelId,
+  FIRERED_DEFAULT_MODEL_ID,
+  FireRedModelSource,
+  isFireRedModelInstalled,
+  isFireRedVadInstalled,
+  isFireRedReady,
+  deleteFireRedModel,
+  getInstalledFireRedModels,
+  getFireRedModelsRoot,
+  getFireRedArchiveUrl,
+} from './fireRedModelCatalog';
+import {
+  getParakeetModelDownloader,
+  getParakeetProgressKey,
+} from './parakeetModelDownloader';
+import {
+  PARAKEET_MODELS,
+  ParakeetModelId,
+  PARAKEET_DEFAULT_MODEL_ID,
+  ParakeetModelSource,
+  isParakeetModelInstalled,
+  isParakeetVadInstalled,
+  isParakeetReady,
+  deleteParakeetModel,
+  getInstalledParakeetModels,
+  getParakeetModelsRoot,
+  getParakeetArchiveUrl,
+} from './parakeetModelCatalog';
+import { getTtsModelDownloader, getTtsProgressKey } from './ttsModelDownloader';
+import {
+  TTS_MODELS,
+  TtsModelId,
+  TTS_DEFAULT_MODEL_ID,
+  TtsModelSource,
+  isTtsModelInstalled,
+  deleteTtsModel,
+  getTtsModelsRoot,
+  getTtsArchiveUrl,
+} from './ttsModelCatalog';
+import { shutdownPythonRuntime } from './pythonRuntime';
+import { isSherpaLibInstalled } from './sherpaOnnx/sherpaLibPaths';
+import { getSherpaAsrRuntime } from './sherpaOnnx/sherpaFunasrRuntime';
+import { getSherpaTtsRuntime } from './sherpaOnnx/ttsRuntime';
+import fse from 'fs-extra';
+import path from 'path';
+import { getTempDir } from './fileUtils';
+import { logMessage, store } from './storeManager';
+import { resolveModelRoot, type StorageKind } from './storagePaths';
+import { testTranslation } from '../translate';
+import { recordProviderHealth } from './providerHealth';
+import { getBuildInfo } from './buildInfo';
+import { getSpeakerDiarizationModelDownloader } from './speakerDiarization/modelDownloader';
+import {
+  SPEAKER_DIARIZATION_EMBEDDING_FILE,
+  SPEAKER_DIARIZATION_PROGRESS_KEY,
+  type SpeakerDiarizationModelSource,
+  deleteSpeakerDiarizationModel,
+  getSpeakerDiarizationModelDir,
+  getSpeakerDiarizationModelsRoot,
+  isSpeakerDiarizationModelInstalled,
+  validateSpeakerDiarizationModelDir,
+} from './speakerDiarization/modelCatalog';
+import { getSpeakerDiarizationRuntime } from './speakerDiarization/runtime';
+
+let downloadingModels = new Set<string>();
+export function isModelDownloadBusy() {
+  return downloadingModels.size > 0;
+}
+let quickDownloadOwner: { senderId: number; requestId: string } | null = null;
+
+/** 可文件夹导入的引擎类型（builtin 走单文件导入，不在此列）。 */
+type FolderImportEngine =
+  | 'funasr'
+  | 'qwen'
+  | 'fireRedAsr'
+  | 'parakeet'
+  | 'fasterWhisper'
+  | 'tts'
+  | 'speakerDiarization';
+
+interface ImportPlan {
+  /** 目标模型必需文件（相对源/目的目录），用于导入前后布局校验。 */
+  requiredFiles: string[];
+  /** 拷贝目的地（绝对路径）。 */
+  destDir: string;
+  /** 引擎专用的额外内容校验；默认仅检查 requiredFiles。 */
+  validate?: (dir: string) => { ok: boolean; missing: string[] };
+}
+
+function validateImportLayout(
+  plan: ImportPlan,
+  dir: string,
+): { ok: boolean; missing: string[] } {
+  return plan.validate
+    ? plan.validate(dir)
+    : validateModelLayout(dir, plan.requiredFiles);
+}
+
+/**
+ * 解析「从文件夹导入」的校验集与目的地（按指定引擎+模型槽消歧）。
+ * - sherpa ASR 引擎：落 `<engine root>/<dirName>`，校验集取 catalog requiredFiles；
+ * - fasterWhisper：落合成快照目录，使 resolveCt2ModelSnapshotDir 命中，校验集为 CT2 关键文件。
+ * 返回 null 表示模型 id 非法/缺失。
+ */
+function resolveImportPlan(
+  engine: FolderImportEngine,
+  modelId: string | undefined,
+): ImportPlan | null {
+  if (engine === 'funasr') {
+    const id = modelId as FunasrModelId | undefined;
+    if (!id || !FUNASR_MODELS[id]) return null;
+    return {
+      requiredFiles: FUNASR_MODELS[id].requiredFiles,
+      destDir: path.join(getFunasrModelsRoot(), FUNASR_MODELS[id].dirName),
+    };
+  }
+  if (engine === 'qwen') {
+    const id = (modelId as QwenModelId) || QWEN_DEFAULT_MODEL_ID;
+    if (!QWEN_MODELS[id]) return null;
+    return {
+      requiredFiles: QWEN_MODELS[id].requiredFiles,
+      destDir: path.join(getQwenModelsRoot(), QWEN_MODELS[id].dirName),
+      validate: (dir) => validateQwenModelLayout(id, dir),
+    };
+  }
+  if (engine === 'fireRedAsr') {
+    const id = (modelId as FireRedModelId) || FIRERED_DEFAULT_MODEL_ID;
+    if (!FIRERED_MODELS[id]) return null;
+    return {
+      requiredFiles: FIRERED_MODELS[id].requiredFiles,
+      destDir: path.join(getFireRedModelsRoot(), FIRERED_MODELS[id].dirName),
+    };
+  }
+  if (engine === 'parakeet') {
+    const id = (modelId as ParakeetModelId) || PARAKEET_DEFAULT_MODEL_ID;
+    if (!PARAKEET_MODELS[id]) return null;
+    return {
+      requiredFiles: PARAKEET_MODELS[id].requiredFiles,
+      destDir: path.join(getParakeetModelsRoot(), PARAKEET_MODELS[id].dirName),
+    };
+  }
+  if (engine === 'fasterWhisper') {
+    if (!modelId) return null;
+    return {
+      requiredFiles: CT2_REQUIRED_FILES,
+      destDir: path.join(
+        getFasterWhisperModelsPath(),
+        toCt2CacheDirName(modelId),
+        'snapshots',
+        CT2_IMPORT_SNAPSHOT_REV,
+      ),
+      validate: (dir) => {
+        const result = validateCt2ModelSnapshot(dir);
+        return { ok: result.ok, missing: result.issues };
+      },
+    };
+  }
+  if (engine === 'tts') {
+    const id = (modelId as TtsModelId) || TTS_DEFAULT_MODEL_ID;
+    if (!TTS_MODELS[id]) return null;
+    return {
+      requiredFiles: TTS_MODELS[id].requiredFiles,
+      destDir: path.join(getTtsModelsRoot(), TTS_MODELS[id].dirName),
+    };
+  }
+  if (engine === 'speakerDiarization') {
+    return {
+      requiredFiles: [
+        path.join('pyannote', 'model.onnx'),
+        SPEAKER_DIARIZATION_EMBEDDING_FILE,
+      ],
+      destDir: getSpeakerDiarizationModelDir(),
+      validate: validateSpeakerDiarizationModelDir,
+    };
+  }
+  return null;
+}
+
+export function setupSystemInfoManager(mainWindow: BrowserWindow) {
+  const modelDownloader = getModelDownloader(mainWindow);
+  const ct2ModelDownloader = getFasterWhisperModelDownloader(mainWindow);
+  const funasrModelDownloader = getFunasrModelDownloader(mainWindow);
+  const qwenModelDownloader = getQwenModelDownloader(mainWindow);
+  const fireRedModelDownloader = getFireRedModelDownloader(mainWindow);
+  const parakeetModelDownloader = getParakeetModelDownloader(mainWindow);
+  const ttsModelDownloader = getTtsModelDownloader(mainWindow);
+  const speakerDiarizationModelDownloader =
+    getSpeakerDiarizationModelDownloader(mainWindow);
+
+  ipcMain.handle('getSystemInfo', async () => {
+    // faster-whisper 自包含运行时：已落盘 → ready（附 manifest 版本）；
+    // 否则 not_installed（资源中心可下载）。运行时探活推迟到真正转写时进行。
+    const pythonEngineStatus: EngineStatus = isRuntimeInstalled(
+      'faster-whisper',
+    )
+      ? {
+          state: 'ready',
+          version: readEngineManifest('faster-whisper')?.version,
+        }
+      : { state: 'not_installed' };
+    // 各模型目录来源（默认/统一目录/单独设置），供引擎页 Badge 与恢复跟随（design D8）
+    const settingsSnapshot = store.get('settings');
+    const userDataPath = smartsubUserData();
+    const sourceOf = (kind: StorageKind) =>
+      resolveModelRoot(kind, settingsSnapshot, userDataPath).source;
+
+    let logsDir = '';
+    try {
+      logsDir = app.getPath('logs');
+    } catch {
+      logsDir = path.join(userDataPath, 'logs');
+    }
+
+    const fasterWhisperDir = getEngineDir('faster-whisper');
+    const fasterWhisperInstalled = isRuntimeInstalled('faster-whisper');
+    const fasterWhisperManifest = readEngineManifest('faster-whisper');
+    const fasterWhisperVariant = normalizePyEngineVariant(
+      fasterWhisperManifest?.variant,
+    );
+    const isGpuVariantSupported =
+      process.platform === 'win32' || process.platform === 'linux';
+
+    const ttsModelsPath = resolveModelRoot(
+      'tts',
+      settingsSnapshot,
+      userDataPath,
+    ).path;
+    const tempDir = getTempDir();
+    const cpus = os.cpus() || [];
+
+    return {
+      modelsInstalled: getModelsInstalled(),
+      modelsPath: getPath('modelsPath'),
+      userDataPath,
+      storageRoot: settingsSnapshot?.storageRoot?.trim() || '',
+      modelPathSources: {
+        ggml: sourceOf('ggml'),
+        ct2: sourceOf('ct2'),
+        funasr: sourceOf('funasr'),
+        qwen: sourceOf('qwen'),
+        firered: sourceOf('firered'),
+        parakeet: sourceOf('parakeet'),
+      },
+      downloadingModels: Array.from(downloadingModels),
+      buildInfo: getBuildInfo(),
+      totalMemoryGB: Math.round(os.totalmem() / (1024 * 1024 * 1024)),
+      fasterWhisperModelsInstalled: getFasterWhisperModelsInstalled(),
+      fasterWhisperModelsPath: getFasterWhisperModelsPath(),
+      pythonEngineStatus,
+      funasrEngineInstalled: isSherpaLibInstalled(),
+      funasrVadInstalled: isFunasrVadInstalled(),
+      funasrAsrModelsInstalled: getInstalledFunasrAsrModels(),
+      funasrModelsPath: getFunasrModelsRoot(),
+      qwenEngineInstalled: isSherpaLibInstalled(),
+      qwenVadInstalled: isQwenVadInstalled(),
+      qwenModelsInstalled: getInstalledQwenModels(),
+      qwenModelsPath: getQwenModelsRoot(),
+      fireRedEngineInstalled: isSherpaLibInstalled(),
+      fireRedVadInstalled: isFireRedVadInstalled(),
+      fireRedModelsInstalled: getInstalledFireRedModels(),
+      fireRedModelsPath: getFireRedModelsRoot(),
+      parakeetEngineInstalled: isSherpaLibInstalled(),
+      parakeetVadInstalled: isParakeetVadInstalled(),
+      parakeetModelsInstalled: getInstalledParakeetModels(),
+      parakeetModelsPath: getParakeetModelsRoot(),
+      speakerDiarizationModelInstalled: isSpeakerDiarizationModelInstalled(),
+      speakerDiarizationRuntimeInstalled: isSherpaLibInstalled(),
+      speakerDiarizationModelsPath: getSpeakerDiarizationModelsRoot(),
+      // 增强的拓扑结构，供 AI 助手、自动化工具与问题排查全面反射
+      storageTopology: {
+        userData: userDataPath,
+        storageRoot: settingsSnapshot?.storageRoot?.trim() || null,
+        pyEnginesRoot: getPyEnginesRoot(),
+        logsDir,
+        tempDir,
+        modelsDirs: {
+          whisper: getPath('modelsPath'),
+          fasterWhisper: getFasterWhisperModelsPath(),
+          funasr: getFunasrModelsRoot(),
+          qwen: getQwenModelsRoot(),
+          firered: getFireRedModelsRoot(),
+          parakeet: getParakeetModelsRoot(),
+          speakerDiarization: getSpeakerDiarizationModelsRoot(),
+          tts: ttsModelsPath,
+        },
+      },
+      engineRuntimes: {
+        fasterWhisper: {
+          engineType: 'python-portable',
+          engineDir: fasterWhisperDir,
+          pythonExecutable: getRuntimePythonPath(fasterWhisperDir),
+          sitePackages: getEngineSitePackages('faster-whisper'),
+          mainScript: getEngineMainPy('faster-whisper'),
+          installed: fasterWhisperInstalled,
+          version: fasterWhisperManifest?.version || null,
+          activeVariant: fasterWhisperVariant,
+          supportedVariants: isGpuVariantSupported ? ['cpu', 'cuda'] : ['cpu'],
+          requiresExternalPython: false,
+          notes:
+            'Isolated self-contained portable Python runtime. Does not depend on system Python. CUDA GPU acceleration is supported only on Windows and Linux with NVIDIA drivers. Inactive variants are parked locally in .parked/ for offline switching.',
+        },
+        sherpaOnnx: {
+          engineType: 'sherpa-onnx-native',
+          engines: ['funasr', 'qwen', 'firered', 'parakeet'],
+          installed: isSherpaLibInstalled(),
+          requiresExternalPython: false,
+          notes:
+            'Native C++ dynamic addon bindings via sherpa-onnx. Completely offline and requires no Python.',
+        },
+        whisperCpp: {
+          engineType: 'whisper-cpp-native',
+          requiresExternalPython: false,
+          notes: 'Native C/C++ binary runtime loading GGML models.',
+        },
+      },
+      hardwareEnvironment: {
+        platform: process.platform,
+        arch: process.arch,
+        osRelease: os.release(),
+        totalMemoryGB: Math.round(os.totalmem() / (1024 * 1024 * 1024)),
+        freeMemoryGB: Math.round(os.freemem() / (1024 * 1024 * 1024)),
+        cpuCount: cpus.length,
+        cpuModel: cpus[0]?.model || 'unknown',
+        gpuAcceleration:
+          process.platform === 'darwin'
+            ? 'Apple Silicon (Metal/CoreML acceleration available, NVIDIA CUDA not available on macOS)'
+            : 'NVIDIA CUDA acceleration available for faster-whisper when NVIDIA GPU and driver are present; CPU fallback supported',
+      },
+      architectureNotes: {
+        storageRule:
+          'Settings storageRoot takes precedence over userData for all model, runtime, and temp directories. Modifying storageRoot changes where new files are saved and looked up, but does not move existing files automatically.',
+        qualityRules:
+          'Reading speed (CPS) calculates non-whitespace characters / duration. Standard reference thresholds are 8 CPS for Chinese and 20 CPS for English/other languages. A 15% tolerance buffer is applied before warning (Chinese warns at >9.2 CPS, English at >23.0 CPS).',
+        pipelineStages:
+          'Pipeline order: Media -> Extract Audio -> VAD Speech Detection -> ASR Transcription -> AI Refine/Segmentation -> Translation -> Dubbing -> Video Composition. ASR works completely offline with local engines. AI Refinement and Translation require a configured cloud or local LLM translation provider. Standard tasks pause at review gates for user proofreading before downstream steps.',
+        troubleshootingTips: {
+          downloadFailed:
+            'Switch download source to mirror in Settings -> Advanced Download Sources, or configure a network proxy.',
+          cudaOnMac:
+            'macOS hardware does not have NVIDIA CUDA support; faster-whisper on macOS always runs in CPU mode with Apple Silicon optimizations.',
+          modelMissingAfterPathChange:
+            'If models disappeared after setting a unified storage root, either move existing model folders into the new storage directory or re-download them.',
+        },
+      },
+    };
+  });
+
+  ipcMain.handle('deleteModel', async (event, modelName) => {
+    await deleteModel(modelName?.toLowerCase());
+    return true;
+  });
+
+  ipcMain.handle('deleteCt2Model', async (_event, modelId) => {
+    deleteCt2Model(modelId);
+    await shutdownPythonRuntime();
+    return true;
+  });
+
+  ipcMain.handle(
+    'downloadModel',
+    async (event, { model, source, needsCoreML, requestId }) => {
+      if (downloadingModels.size > 0) {
+        return { success: false, error: 'anotherDownloadInProgress' };
+      }
+
+      downloadingModels.add(model);
+      quickDownloadOwner =
+        typeof requestId === 'string'
+          ? { senderId: event.sender.id, requestId }
+          : null;
+      try {
+        await modelDownloader.download(
+          model?.toLowerCase(),
+          source,
+          needsCoreML,
+        );
+        downloadingModels.delete(model);
+        return { success: true };
+      } catch (error) {
+        logMessage(`Model download error: ${error}`, 'error');
+        downloadingModels.delete(model);
+        return { success: false, error: String(error) };
+      } finally {
+        quickDownloadOwner = null;
+      }
+    },
+  );
+
+  ipcMain.handle('downloadCt2Model', async (_event, { model, source }) => {
+    if (downloadingModels.size > 0) {
+      return { success: false, error: 'anotherDownloadInProgress' };
+    }
+
+    const progressKey = getCt2ProgressKey(model);
+    downloadingModels.add(progressKey);
+    try {
+      await ct2ModelDownloader.download(model, source || 'hf-mirror');
+      downloadingModels.delete(progressKey);
+      return { success: true };
+    } catch (error) {
+      logMessage(`CT2 model download error: ${error}`, 'error');
+      downloadingModels.delete(progressKey);
+      return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle(
+    'downloadFunasrModel',
+    async (
+      _event,
+      { model, source }: { model: FunasrModelId; source?: string },
+    ) => {
+      if (downloadingModels.size > 0) {
+        return { success: false, error: 'anotherDownloadInProgress' };
+      }
+      const progressKey = getFunasrProgressKey(model);
+      downloadingModels.add(progressKey);
+      try {
+        await funasrModelDownloader.download(model, source || 'hf-mirror');
+        downloadingModels.delete(progressKey);
+        return { success: true };
+      } catch (error) {
+        logMessage(`funasr model download error: ${error}`, 'error');
+        downloadingModels.delete(progressKey);
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle('getFunasrModelStatus', async () => ({
+    success: true,
+    baseReady: isSherpaLibInstalled(),
+    engineInstalled: isSherpaLibInstalled(),
+    ready: isFunasrReady(),
+    models: (Object.keys(FUNASR_MODELS) as FunasrModelId[]).map((id) => ({
+      id,
+      installed: isFunasrModelInstalled(id),
+    })),
+  }));
+
+  ipcMain.handle(
+    'deleteFunasrModel',
+    async (_event, modelId: FunasrModelId) => {
+      try {
+        deleteFunasrModel(modelId);
+        await shutdownPythonRuntime();
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'downloadQwenModel',
+    async (
+      _event,
+      { model, source }: { model: QwenModelId; source?: QwenModelSource },
+    ) => {
+      if (downloadingModels.size > 0) {
+        return { success: false, error: 'anotherDownloadInProgress' };
+      }
+      const progressKey = getQwenProgressKey(model);
+      downloadingModels.add(progressKey);
+      try {
+        await qwenModelDownloader.download(model, source);
+        downloadingModels.delete(progressKey);
+        return { success: true };
+      } catch (error) {
+        logMessage(`qwen model download error: ${error}`, 'error');
+        downloadingModels.delete(progressKey);
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle('getQwenModelStatus', async () => ({
+    success: true,
+    engineInstalled: isSherpaLibInstalled(),
+    vadInstalled: isQwenVadInstalled(),
+    ready: isQwenReady(),
+    models: (Object.keys(QWEN_MODELS) as QwenModelId[]).map((id) => ({
+      id,
+      installed: isQwenModelInstalled(id),
+      sources: getQwenSupportedSources(id),
+    })),
+  }));
+
+  ipcMain.handle('deleteQwenModel', async (_event, modelId: QwenModelId) => {
+    try {
+      // Qwen 与 funasr 共享同一 sherpa worker：删除前先释放 worker，避免 Windows 上
+      // 大模型文件被加载占用导致 rm 失败（worker 会在下次转写/预热时自动重建）。
+      getSherpaAsrRuntime().dispose();
+      deleteQwenModel(modelId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle(
+    'downloadSpeakerDiarizationModel',
+    async (
+      _event,
+      { source }: { source?: SpeakerDiarizationModelSource } = {},
+    ) => {
+      if (downloadingModels.size > 0) {
+        return { success: false, error: 'anotherDownloadInProgress' };
+      }
+      downloadingModels.add(SPEAKER_DIARIZATION_PROGRESS_KEY);
+      try {
+        await speakerDiarizationModelDownloader.download(source);
+        downloadingModels.delete(SPEAKER_DIARIZATION_PROGRESS_KEY);
+        return { success: true };
+      } catch (error) {
+        logMessage(
+          `speaker diarization model download error: ${error}`,
+          'error',
+        );
+        downloadingModels.delete(SPEAKER_DIARIZATION_PROGRESS_KEY);
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle('getSpeakerDiarizationModelStatus', async () => ({
+    success: true,
+    installed: isSpeakerDiarizationModelInstalled(),
+    runtimeInstalled: isSherpaLibInstalled(),
+    modelsPath: getSpeakerDiarizationModelsRoot(),
+  }));
+
+  ipcMain.handle('deleteSpeakerDiarizationModel', async () => {
+    try {
+      getSpeakerDiarizationRuntime().dispose();
+      deleteSpeakerDiarizationModel();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle(
+    'downloadFireRedModel',
+    async (
+      _event,
+      { model, source }: { model: FireRedModelId; source?: FireRedModelSource },
+    ) => {
+      if (downloadingModels.size > 0) {
+        return { success: false, error: 'anotherDownloadInProgress' };
+      }
+      const progressKey = getFireRedProgressKey(model);
+      downloadingModels.add(progressKey);
+      try {
+        await fireRedModelDownloader.download(model, source);
+        downloadingModels.delete(progressKey);
+        return { success: true };
+      } catch (error) {
+        logMessage(`firered model download error: ${error}`, 'error');
+        downloadingModels.delete(progressKey);
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle('getFireRedModelStatus', async () => ({
+    success: true,
+    engineInstalled: isSherpaLibInstalled(),
+    vadInstalled: isFireRedVadInstalled(),
+    ready: isFireRedReady(),
+    models: (Object.keys(FIRERED_MODELS) as FireRedModelId[]).map((id) => ({
+      id,
+      installed: isFireRedModelInstalled(id),
+    })),
+  }));
+
+  ipcMain.handle(
+    'deleteFireRedModel',
+    async (_event, modelId: FireRedModelId) => {
+      try {
+        // fireRed 与 funasr/qwen 共享同一 sherpa worker：删除前先释放 worker，避免 Windows 上
+        // 大模型文件被加载占用导致 rm 失败（worker 会在下次转写/预热时自动重建）。
+        getSherpaAsrRuntime().dispose();
+        deleteFireRedModel(modelId);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'downloadParakeetModel',
+    async (
+      _event,
+      {
+        model,
+        source,
+      }: {
+        model: ParakeetModelId;
+        source?: ParakeetModelSource;
+      },
+    ) => {
+      if (downloadingModels.size > 0) {
+        return { success: false, error: 'anotherDownloadInProgress' };
+      }
+      const progressKey = getParakeetProgressKey(model);
+      downloadingModels.add(progressKey);
+      try {
+        await parakeetModelDownloader.download(model, source);
+        downloadingModels.delete(progressKey);
+        return { success: true };
+      } catch (error) {
+        logMessage(`parakeet model download error: ${error}`, 'error');
+        downloadingModels.delete(progressKey);
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle('getParakeetModelStatus', async () => ({
+    success: true,
+    engineInstalled: isSherpaLibInstalled(),
+    vadInstalled: isParakeetVadInstalled(),
+    ready: isParakeetReady(),
+    models: (Object.keys(PARAKEET_MODELS) as ParakeetModelId[]).map((id) => ({
+      id,
+      installed: isParakeetModelInstalled(id),
+    })),
+  }));
+
+  ipcMain.handle(
+    'deleteParakeetModel',
+    async (_event, modelId: ParakeetModelId) => {
+      try {
+        getSherpaAsrRuntime().dispose();
+        deleteParakeetModel(modelId);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'downloadTtsModel',
+    async (
+      _event,
+      { model, source }: { model: TtsModelId; source?: TtsModelSource },
+    ) => {
+      if (downloadingModels.size > 0) {
+        return { success: false, error: 'anotherDownloadInProgress' };
+      }
+      const progressKey = getTtsProgressKey(model);
+      downloadingModels.add(progressKey);
+      try {
+        await ttsModelDownloader.download(model, source);
+        downloadingModels.delete(progressKey);
+        return { success: true };
+      } catch (error) {
+        logMessage(`tts model download error: ${error}`, 'error');
+        downloadingModels.delete(progressKey);
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle('getTtsModelStatus', async () => ({
+    success: true,
+    engineInstalled: isSherpaLibInstalled(),
+    models: (Object.keys(TTS_MODELS) as TtsModelId[]).map((id) => {
+      const spec = TTS_MODELS[id];
+      return {
+        id,
+        installed: isTtsModelInstalled(id),
+        displayName: spec.displayName,
+        languages: spec.languages,
+        approxInstallBytes: spec.approxInstallBytes,
+        sampleRate: spec.sampleRate,
+        defaultVoiceId: spec.defaultVoiceId,
+        voices: spec.voices,
+        // 克隆模型：voice 池 = 我的音色，渲染层据此改从 voiceClone:list 取。
+        cloneOnly: spec.cloneOnly ?? false,
+      };
+    }),
+  }));
+
+  ipcMain.handle('deleteTtsModel', async (_event, modelId: TtsModelId) => {
+    try {
+      // TTS worker 独立于 ASR worker：删除前释放自身实例，避免 Windows 文件锁。
+      getSherpaTtsRuntime().dispose();
+      deleteTtsModel(modelId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+
+  // 「复制下载链接」专用：按引擎域 + 模型 + 当前选中源解析一个可复制的下载/仓库链接。
+  // 复用各 catalog 既有的 URL 构造，避免 renderer 重复实现导致与真实下载链接漂移。
+  // - funasr（HF 仓库逐文件）/ qwen·firered（modelscope 逐文件）无单一直链 → 复制仓库页地址；
+  // - qwen·firered 的 ghproxy/github 源为整包 → 复制 tar.bz2 直链；
+  // - pyEngine 为本平台运行时整包 → 复制 release 资产直链。
+  ipcMain.handle(
+    'resolveModelDownloadUrl',
+    async (
+      _event,
+      {
+        scope,
+        modelId,
+        source,
+        variant,
+      }: {
+        scope: 'funasr' | 'qwen' | 'firered' | 'parakeet' | 'pyEngine' | 'tts';
+        modelId?: string;
+        source: string;
+        variant?: PyEngineVariant;
+      },
+    ): Promise<{ success: boolean; url?: string; error?: string }> => {
+      try {
+        if (scope === 'funasr') {
+          const spec = FUNASR_MODELS[modelId as FunasrModelId];
+          if (!spec?.repo) return { success: false, error: 'noRepo' };
+          return { success: true, url: `${getHfHost(source)}/${spec.repo}` };
+        }
+        if (scope === 'qwen') {
+          const spec = QWEN_MODELS[modelId as QwenModelId];
+          if (!spec) return { success: false, error: 'unknownModel' };
+          if (source === 'modelscope') {
+            return {
+              success: true,
+              url: `${getModelScopeBase()}/models/${spec.modelScopeRepo}`,
+            };
+          }
+          const url = getQwenArchiveUrl(
+            spec,
+            source === 'github' ? 'github' : 'ghproxy',
+          );
+          return url
+            ? { success: true, url }
+            : { success: false, error: 'sourceUnavailable' };
+        }
+        if (scope === 'firered') {
+          const spec = FIRERED_MODELS[modelId as FireRedModelId];
+          if (!spec) return { success: false, error: 'unknownModel' };
+          if (source === 'modelscope') {
+            return {
+              success: true,
+              url: `${getModelScopeBase()}/models/${spec.modelScopeRepo}`,
+            };
+          }
+          return {
+            success: true,
+            url: getFireRedArchiveUrl(
+              spec,
+              source === 'github' ? 'github' : 'ghproxy',
+            ),
+          };
+        }
+        if (scope === 'parakeet') {
+          const spec = PARAKEET_MODELS[modelId as ParakeetModelId];
+          if (!spec) return { success: false, error: 'unknownModel' };
+          return {
+            success: true,
+            url: getParakeetArchiveUrl(
+              spec,
+              source === 'github' ? 'github' : 'ghproxy',
+            ),
+          };
+        }
+        if (scope === 'pyEngine') {
+          const s =
+            source === 'github' || source === 'gitcode' ? source : 'ghproxy';
+          return {
+            success: true,
+            url: getEngineDownloadUrl(
+              s,
+              'faster-whisper',
+              normalizePyEngineVariant(variant),
+            ),
+          };
+        }
+        if (scope === 'tts') {
+          const spec = TTS_MODELS[modelId as TtsModelId];
+          if (!spec) return { success: false, error: 'unknownModel' };
+          return {
+            success: true,
+            url: getTtsArchiveUrl(
+              spec,
+              source === 'github' ? 'github' : 'ghproxy',
+            ),
+          };
+        }
+        return { success: false, error: 'unknownScope' };
+      } catch (error) {
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'cancelModelDownload',
+    async (event, request?: { requestId?: string }) => {
+      // Quick-install cancellation must never abort another window's download.
+      if (request?.requestId) {
+        if (
+          quickDownloadOwner?.senderId === event.sender.id &&
+          quickDownloadOwner.requestId === request.requestId
+        )
+          modelDownloader.cancel();
+        return true;
+      }
+      modelDownloader.cancel();
+      ct2ModelDownloader.cancel();
+      funasrModelDownloader.cancel();
+      qwenModelDownloader.cancel();
+      fireRedModelDownloader.cancel();
+      ttsModelDownloader.cancel();
+      speakerDiarizationModelDownloader.cancel();
+      // Parakeet 等待当前会话真正退出并完成 finally 清理，避免取消后立即重试时
+      // 旧任务清掉新任务的进度键/互斥状态。
+      await parakeetModelDownloader.cancel();
+      // 不提前清空下载锁：各下载 session 在真正响应 abort 并退出后自行移除 key。
+      // 否则 UI 可立即启动新任务，让旧异步链复用新 controller / 混写进度与文件。
+      return true;
+    },
+  );
+
+  ipcMain.handle(
+    'importModel',
+    async (
+      _event,
+      options?: {
+        engine?: 'builtin' | FolderImportEngine;
+        modelId?: string;
+        sourcePath?: string;
+      },
+    ) => {
+      const engine = options?.engine;
+
+      // builtin（默认/无参）：维持单文件导入（.bin / .mlmodelc → builtin 模型目录）
+      if (!engine || engine === 'builtin') {
+        const result = options?.sourcePath
+          ? { canceled: false, filePaths: [options.sourcePath] }
+          : await dialog.showOpenDialog(dialogWindow(mainWindow), {
+              properties: ['openFile'],
+              filters: [
+                { name: 'Model Files', extensions: ['bin', 'mlmodelc'] },
+              ],
+            });
+
+        if (!result.canceled && result.filePaths.length > 0) {
+          const sourcePath = result.filePaths[0];
+          const fileName = path.basename(sourcePath);
+          const destPath = path.join(getPath('modelsPath'), fileName);
+
+          try {
+            await fse.copy(sourcePath, destPath);
+            return { success: true };
+          } catch (error) {
+            console.error('导入模型失败:', error);
+            return { success: false, error: String(error) };
+          }
+        }
+
+        return { success: false, canceled: true };
+      }
+
+      // 其它引擎：从本地文件夹按指定模型槽导入
+      const plan = resolveImportPlan(engine, options?.modelId);
+      if (!plan) {
+        return { success: false, reason: 'invalid-model' };
+      }
+
+      const picked = options?.sourcePath
+        ? { canceled: false, filePaths: [options.sourcePath] }
+        : await dialog.showOpenDialog(dialogWindow(mainWindow), {
+            properties: ['openDirectory'],
+          });
+      if (picked.canceled || picked.filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+      const srcDir = picked.filePaths[0];
+
+      // 导入前校验布局：缺关键文件直接拒绝，不写盘
+      const pre = validateImportLayout(plan, srcDir);
+      if (!pre.ok) {
+        return {
+          success: false,
+          reason: 'invalid-layout',
+          missing: pre.missing,
+        };
+      }
+
+      const transactionId = randomUUID();
+      const stagedDir = `${plan.destDir}.import-${transactionId}`;
+      const backupDir = `${plan.destDir}.backup-${transactionId}`;
+      try {
+        // 先复制到同父目录 staging 并复校验，失败时不触碰已有模型。
+        await fse.copy(srcDir, stagedDir, { overwrite: true });
+        const post = validateImportLayout(plan, stagedDir);
+        if (!post.ok) {
+          return {
+            success: false,
+            reason: 'invalid-layout',
+            missing: post.missing,
+          };
+        }
+
+        // 仅在 staging 完整后释放 worker 并原子替换；提交失败自动恢复旧目录。
+        if (engine === 'tts') {
+          getSherpaTtsRuntime().dispose();
+        } else if (engine === 'speakerDiarization') {
+          getSpeakerDiarizationRuntime().dispose();
+        } else if (engine !== 'fasterWhisper') {
+          getSherpaAsrRuntime().dispose();
+        }
+        await commitStagedDirectory({
+          stagedDir,
+          destDir: plan.destDir,
+          backupDir,
+          onCleanupWarning: (message) => logMessage(message, 'warning'),
+        });
+        return { success: true };
+      } catch (error) {
+        logMessage(`import model error: ${error}`, 'error');
+        return { success: false, error: String(error) };
+      } finally {
+        // commit 成功后 staging 已被 rename；失败时清理新内容。backup 不在此删除，
+        // 因为极端回滚失败时它是用户旧模型的唯一副本。
+        await fse.remove(stagedDir).catch(() => {});
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'openModelsFolder',
+    async (
+      _event,
+      options?: {
+        pathType?:
+          | 'ggml'
+          | 'ct2'
+          | 'funasr'
+          | 'qwen'
+          | 'firered'
+          | 'parakeet'
+          | 'tts'
+          | 'speakerDiarization';
+      },
+    ) => {
+      const modelsPath =
+        options?.pathType === 'ct2'
+          ? getFasterWhisperModelsPath()
+          : options?.pathType === 'funasr'
+            ? getFunasrModelsRoot()
+            : options?.pathType === 'qwen'
+              ? getQwenModelsRoot()
+              : options?.pathType === 'firered'
+                ? getFireRedModelsRoot()
+                : options?.pathType === 'parakeet'
+                  ? getParakeetModelsRoot()
+                  : options?.pathType === 'tts'
+                    ? getTtsModelsRoot()
+                    : options?.pathType === 'speakerDiarization'
+                      ? getSpeakerDiarizationModelsRoot()
+                      : (getPath('modelsPath') as string);
+      try {
+        await fse.ensureDir(modelsPath);
+        const err = await shell.openPath(modelsPath);
+        if (err) {
+          return { success: false, error: err };
+        }
+        return { success: true };
+      } catch (error) {
+        logMessage(`Failed to open models folder: ${error}`, 'error');
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
+  // 获取临时目录路径
+  ipcMain.handle('getTempDir', async () => {
+    return getTempDir();
+  });
+
+  // 打开任意本地目录（存储目录变更对话框「打开旧目录」用；目录不存在时报错、不创建）
+  ipcMain.handle(
+    'openDirectoryPath',
+    async (_event, options?: { path?: string }) => {
+      const target = (options?.path || '').trim();
+      if (!target || !fse.existsSync(target)) {
+        return { success: false, error: 'directory not found' };
+      }
+      const err = await shell.openPath(target);
+      return err ? { success: false, error: err } : { success: true };
+    },
+  );
+
+  // 打开统一存储根目录（未设置时打开 userData 默认基座）
+  ipcMain.handle('openStorageRoot', async () => {
+    const root =
+      (store.get('settings')?.storageRoot || '').trim() ||
+      smartsubUserData();
+    try {
+      await fse.ensureDir(root);
+      const err = await shell.openPath(root);
+      if (err) {
+        return { success: false, error: err };
+      }
+      return { success: true };
+    } catch (error) {
+      logMessage(`Failed to open storage root: ${error}`, 'error');
+      return { success: false, error: String(error) };
+    }
+  });
+
+  // 清除缓存
+  ipcMain.handle('clearCache', async () => {
+    try {
+      const tempDir = getTempDir();
+      const files = await fse.readdir(tempDir);
+
+      // 删除临时音频/字幕缓存与字幕保存备份，保留目录结构
+      for (const file of files) {
+        if (
+          file.endsWith('.wav') ||
+          file.endsWith('.srt') ||
+          file.endsWith('.bak')
+        ) {
+          const filePath = path.join(tempDir, file);
+          await fse.unlink(filePath);
+          logMessage(`Deleted cache file: ${filePath}`, 'info');
+        }
+      }
+
+      return true;
+    } catch (error) {
+      logMessage(`Failed to clear cache: ${error}`, 'error');
+      return false;
+    }
+  });
+
+  ipcMain.handle('testTranslation', async (_, args) => {
+    const { provider, sourceLanguage, targetLanguage } = args;
+    try {
+      const result = await testTranslation(
+        provider,
+        sourceLanguage,
+        targetLanguage,
+      );
+      recordProviderHealth(
+        'translation',
+        provider,
+        Boolean(result?.translation),
+      );
+      return result;
+    } catch (error) {
+      recordProviderHealth('translation', provider, false);
+      throw error;
+    }
+  });
+}

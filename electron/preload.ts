@@ -1,7 +1,7 @@
 // Copyright (c) 2025 hotflow2024
 // Licensed under AGPL-3.0-or-later. See LICENSE for details.
 // Commercial licensing available. See COMMERCIAL_LICENSE.md.
-import { ipcRenderer, contextBridge } from 'electron'
+import { ipcRenderer, contextBridge, webUtils } from 'electron'
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
@@ -23,9 +23,14 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
 })
 
+// SmartSub bridge: renderer File → absolute path (drag & drop / file picker).
+// webUtils.getPathForFile is the sandbox-safe replacement for File.path.
+contextBridge.exposeInMainWorld('smartsubBridge', {
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+})
+
 // Image storage API
-contextBridge.exposeInMainWorld('imageStorage', {
-  // Save image from URL to local storage
+contextBridge.exposeInMainWorld('imageStorage', {  // Save image from URL to local storage
   saveImage: (url: string, category: string, filename: string) => 
     ipcRenderer.invoke('save-image', { url, category, filename }),
   

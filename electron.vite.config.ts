@@ -75,16 +75,85 @@ function apiCorsProxyPlugin(): Plugin {
   };
 }
 
+/**
+ * Vite 插件:SmartSub 树内相对路径惰性 require 打包修复
+ *
+ * 树内(modelCatalog/downloadConfig/voiceClone 等)为让纯函数可在非 Electron
+ * 环境(单测)引用,大量使用 `const { store } = require('./store') as ...` 式
+ * 惰性 require(树文件按文件落盘时相对路径运行时可解析)。宿主主进程是单文件
+ * bundle(rollup 无法静态分析字符串 require),运行时 `require('./store')` 相对
+ * out/main/index.cjs 解析 → Cannot find module。getSystemInfo 等通道首次触达
+ * 即崩(Task 12 冒烟实测)。
+ *
+ * 修复:把 smartsub 树内的相对 require 表达式改写为顶部提升的静态
+ * `import * as ns from '<spec>'`(bundle 内该模块本就在依赖图里,主进程加载期
+ * electron 已可用,提升为饿加载无副作用;非相对说明符——electron/node 内建/
+ * external 依赖——不经此插件,保持运行时 require)。
+ */
+function smartsubLazyRelativeRequirePlugin(): Plugin {
+  const treeRoot = path.resolve(__dirname, 'electron/services/smartsub');
+  return {
+    name: 'smartsub-lazy-relative-require',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.startsWith(treeRoot) || !id.endsWith('.ts')) return null;
+      if (!code.includes("require('./") && !code.includes("require('../")) return null;
+      const specRe = /require\((['"])(\.\.?\/[^'"]+)\1\)/g;
+      const bindings = new Map<string, string>();
+      let counter = 0;
+      const rewritten = code.replace(specRe, (_match, _quote: string, spec: string) => {
+        let binding = bindings.get(spec);
+        if (!binding) {
+          binding = `__smartsubLazyRequire${counter += 1}`;
+          bindings.set(spec, binding);
+        }
+        return binding;
+      });
+      if (bindings.size === 0) return null;
+      const hoisted = [...bindings.entries()]
+        .map(([spec, binding]) => `import * as ${binding} from '${spec}';`)
+        .join('\n');
+      return `${hoisted}\n${rewritten}`;
+    },
+  };
+}
+
 export default defineConfig({
   main: {
+    // '@smartsub/bridge' 类型侧由根 tsconfig paths 指向 declaration-only 门面
+    // (防止根程序 import 追入整棵 smartsub 树),打包侧在此指回真实实现。
+    plugins: [smartsubLazyRelativeRequirePlugin()],
+    resolve: {
+      alias: {
+        '@smartsub/bridge': path.resolve(__dirname, 'electron/services/smartsub/bridge/index.ts'),
+      },
+    },
     build: {
+      // electron-vite v5 默认 externalizeDeps=true:把 package.json 全部 dependencies
+      // 运行时 require 化。但 https-proxy-agent / http-proxy-agent v9 是纯 ESM 包,
+      // CJS 主进程产物运行时 require 会 ERR_REQUIRE_ESM(Phase 0 冒烟实测)。原生
+      // SmartSub 在 nextron.config.js 做了同样处理:把这两包从外部化排除、打进
+      // bundle(传递依赖 agent-base / proxy-agent-negotiate 一并打入)。其可选动态
+      // import 的 kerberos(Kerberos 代理鉴权才用,永不启用)在 external 里保持懒加载。
+      externalizeDeps: { exclude: ['https-proxy-agent', 'http-proxy-agent'] },
       rollupOptions: {
         input: {
           index: path.resolve(__dirname, 'electron/main.ts')
         },
         output: {
           format: 'cjs'
-        }
+        },
+        external: [
+          'ffmpeg-static', 'fluent-ffmpeg', 'axios', 'fs-extra', 'lodash', 'uuid',
+          'iconv-lite', 'opencc-js', 'srt-webvtt', 'tinyld', 'fontkit', 'decompress',
+          'msedge-tts', 'openai', 'zod', 'electron-store',
+          'systeminformation', 'jsonrepair', 'diff',
+          // Task 3 补装(496c816)的翻译服务运行时依赖,同样运行时 require、不进 bundle
+          '@alicloud/alimt20181012', '@alicloud/openapi-client', '@alicloud/tea-util',
+          '@volcengine/openapi', 'really-relaxed-json',
+          // 仅 proxy-agent-negotiate 的可选动态 import 触达,未安装,永不执行
+          'kerberos',
+        ]
       }
     }
   },
@@ -113,6 +182,9 @@ export default defineConfig({
       alias: {
         '@': path.resolve(__dirname, './src'),
         '@editor': path.resolve(__dirname, './src/editor'),
+        // SmartSub 移植树类型(type-only)导入解析;renderer 段独立于 main 段
+        // 的 '@smartsub/bridge' 实体别名,二者无冲突
+        '@smartsub': path.resolve(__dirname, './electron/services/smartsub'),
         '@opencut/ai-core/services/prompt-compiler': path.resolve(__dirname, './src/packages/ai-core/services/prompt-compiler.ts'),
         '@opencut/ai-core/api/task-poller': path.resolve(__dirname, './src/packages/ai-core/api/task-poller.ts'),
         '@opencut/ai-core/protocol': path.resolve(__dirname, './src/packages/ai-core/protocol/index.ts'),

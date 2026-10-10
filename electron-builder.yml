@@ -21,10 +21,24 @@ extraResources:
     to: demo-data
     filter:
       - "**/*"
+  # smartsub 运行时资源:落地 Resources/extraResources/smartsub,
+  # 与 getExtraResourcesPath()(process.resourcesPath/extraResources/smartsub)对齐
+  - from: smartsub-resources
+    to: extraResources/smartsub
+    filter:
+      - "**/*"
 
 asar: true
 asarUnpack:
   - "**/*.node"
+  - "node_modules/ffmpeg-static/bin/${os}/${arch}/ffmpeg"
+  - "node_modules/ffmpeg-static/index.js"
+  - "node_modules/ffmpeg-static/package.json"
+  - "node_modules/ffmpeg-static/ffmpeg"
+  - "node_modules/ffmpeg-static/ffmpeg.exe"
+  - "node_modules/ffmpeg-static/ffmpeg.macos"
+  - "node_modules/ffmpeg-static/ffmpeg.linux"
+  - "node_modules/ffmpeg-static/ffmpeg.win32"
 
 # 图标配置
 icon: build/icon.ico
@@ -32,6 +46,8 @@ icon: build/icon.ico
 mac:
   icon: build/icon.icns
   artifactName: ${name}-${version}-${arch}-mac.${ext}
+  extendInfo:
+    NSMicrophoneUsageDescription: "TRANSVIDEO 需要使用麦克风录制您的声音以创建克隆音色(字幕配音功能)。"
   target:
     - dmg
     - zip

@@ -1,0 +1,166 @@
+import { AzureOpenAI } from 'openai';
+import http from 'http';
+import https from 'https';
+import { TRANSLATION_JSON_SCHEMA } from '../translate/constants/schema';
+import {
+  TaskCancelledError,
+  throwIfSignalCancelled,
+} from '../helpers/taskContext';
+import type { TranslationRequestOptions } from '../translate/types';
+import {
+  isStructuredOutputUnsupportedError,
+  resolveStructuredOutputMode,
+  runWithStructuredOutputFallback,
+  type StructuredOutputMode,
+} from './structuredOutputFallback';
+import {
+  resolveThinkingParams,
+  runWithThinkingParamFallback,
+  extractOpenAIResponseMeta,
+} from './thinkingControl';
+
+type AzureOpenAIProvider = {
+  id?: string;
+  apiUrl: string;
+  apiKey: string;
+  modelName?: string;
+  prompt?: string;
+  systemPrompt?: string;
+  useJsonMode?: boolean;
+  structuredOutput?: StructuredOutputMode;
+  strictStructuredOutput?: boolean;
+  enableThinking?: boolean;
+};
+
+/** 老 api-version 不支持 response_format，任何结构化模式都退化为普通输出 */
+function buildResponseFormat(
+  mode: StructuredOutputMode,
+  apiVersion: string,
+  responseJsonSchema?: Record<string, unknown>,
+): Record<string, any> | undefined {
+  if (parseFloat(apiVersion) < 2023.12) return undefined;
+  if (mode === 'json_schema') {
+    // 优先使用按批次动态生成的 schema（锁死键集合，design D1/D2）
+    const schema = responseJsonSchema ?? TRANSLATION_JSON_SCHEMA;
+    return {
+      type: 'json_schema',
+      json_schema: {
+        name: 'subtitle_translation',
+        ...(responseJsonSchema ? { strict: true } : {}),
+        schema,
+      },
+    };
+  }
+  if (mode === 'json_object') {
+    return { type: 'json_object' };
+  }
+  return undefined;
+}
+
+export async function translateWithAzureOpenAI(
+  text: string | string[],
+  provider: AzureOpenAIProvider,
+  _sourceLanguage?: string,
+  _targetLanguage?: string,
+  options?: TranslationRequestOptions,
+) {
+  try {
+    throwIfSignalCancelled(options?.signal);
+    // 处理Azure OpenAI的endpoint URL
+    const url = new URL(provider.apiUrl);
+    const pathParts = url.pathname.split('/');
+    const deploymentName = pathParts[pathParts.indexOf('deployments') + 1];
+    const apiVersion = url.searchParams.get('api-version') || '2023-05-15';
+    const baseURL = url.origin;
+
+    const openai = new AzureOpenAI({
+      ...(options?.beforeRequest ? { maxRetries: 0 } : {}),
+      endpoint: baseURL,
+      apiKey: provider.apiKey,
+      // AzureOpenAI uses the same SDK-owned default agents as OpenAI.
+      httpAgent:
+        url.protocol === 'https:' ? https.globalAgent : http.globalAgent,
+      deployment: deploymentName,
+      apiVersion: apiVersion,
+    });
+
+    const sysPrompt =
+      provider.systemPrompt ||
+      'You are a professional subtitle translation tool';
+    const userPrompt = Array.isArray(text) ? text.join('\n') : text;
+
+    // 思考控制克制接入（openspec: ai-thinking-mode-control D9）：
+    // Azure 部署名是用户自定义的，仅当 deployment/modelName 命中 o 系/gpt-5
+    // 推理型号模式时才注入 reasoning_effort，常规模型不干预
+    const thinkingProvider = {
+      ...provider,
+      id: provider.id || 'azureopenai',
+      apiUrl: undefined, // 屏蔽 URL 嗅探，Azure 只按型号嗅探
+      modelName: provider.modelName || deploymentName,
+    };
+
+    const runTranslation = async () =>
+      // 结构化输出走共享回退链（json_schema → json_object → disabled）
+      runWithStructuredOutputFallback({
+        startMode: resolveStructuredOutputMode(provider, 'json_schema'),
+        strict: provider.strictStructuredOutput === true,
+        signal: options?.signal,
+        shouldFallback: (from, error) =>
+          from === 'json_schema' || isStructuredOutputUnsupportedError(error),
+        onFallback: (from, to, error) =>
+          console.warn(
+            `Azure OpenAI structured output ${from} failed, falling back to ${to}:`,
+            error,
+          ),
+        attempt: (mode) =>
+          runWithThinkingParamFallback({
+            provider: thinkingProvider,
+            signal: options?.signal,
+            onFallback: (error) =>
+              console.warn(
+                'Azure OpenAI rejected automatic reasoning_effort; retrying the same request mode without it:',
+                error,
+              ),
+            attempt: () => {
+              const baseParams: any = {
+                model: undefined,
+                messages: [
+                  { role: 'system', content: sysPrompt },
+                  { role: 'user', content: userPrompt },
+                ],
+                temperature: 0.3,
+                ...(resolveThinkingParams(thinkingProvider) || {}),
+              };
+              const responseFormat = buildResponseFormat(
+                mode,
+                apiVersion,
+                options?.responseJsonSchema,
+              );
+              const requestParams = responseFormat
+                ? { ...baseParams, response_format: responseFormat }
+                : baseParams;
+              return (async () => {
+                await options?.beforeRequest?.();
+                throwIfSignalCancelled(options?.signal);
+                return openai.chat.completions.create(requestParams, {
+                  signal: options?.signal,
+                });
+              })();
+            },
+          }),
+      });
+    const completion = await runTranslation();
+    throwIfSignalCancelled(options?.signal);
+
+    options?.onResponseMeta?.(extractOpenAIResponseMeta(completion));
+    const result = completion?.choices?.[0]?.message?.content?.trim();
+
+    return result;
+  } catch (error) {
+    if (options?.signal?.aborted) throw new TaskCancelledError();
+    console.error('Azure OpenAI translation error:', error);
+    throw new Error(`Azure OpenAI translation failed: ${error.message}`);
+  }
+}
+
+export default translateWithAzureOpenAI;

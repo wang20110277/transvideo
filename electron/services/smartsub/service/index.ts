@@ -1,0 +1,16 @@
+export { default as volcTranslator } from './volc';
+export { default as baiduTranslator } from './baidu';
+export { default as deeplxTranslator } from './deeplx';
+export { default as ollamaTranslator } from './ollama';
+export { default as openaiTranslator } from './openai';
+export { default as azureTranslator } from './azure';
+export { default as azureOpenaiTranslator } from './azureOpenai';
+export { default as aliyunTranslator } from './aliyun';
+export { default as googleTranslator } from './google';
+export { default as bingFreeTranslator } from './bingFree';
+export { default as googleFreeTranslator } from './googleFree';
+export { default as doubaoTranslator } from './doubao';
+export { default as niutransTranslator } from './niutrans';
+export { default as tencentTranslator } from './tencent';
+export { default as xunfeiTranslator } from './xunfei';
+export { default as qwenMtTranslator } from './qwenMt';

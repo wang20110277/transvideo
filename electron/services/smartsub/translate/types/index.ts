@@ -1,0 +1,103 @@
+import type { ResolvedGlossaryEntry } from '../../types/glossary';
+import type { ProviderFallbackRunner } from '../services/providerFallback';
+import type { ActivityObserver } from '../../types/taskActivity';
+
+export interface Subtitle {
+  id: string;
+  startEndTime: string;
+  content: string[];
+}
+
+export interface TranslationResult {
+  id: string;
+  startEndTime: string;
+  sourceContent: string;
+  targetContent: string;
+  translationStatus?: 'success' | 'failed';
+  translationError?: string;
+}
+
+export interface TranslationConfig {
+  onActivity?: ActivityObserver;
+  sourceLanguage: string;
+  targetLanguage: string;
+  provider: Provider;
+  translator: TranslatorFunction;
+  glossaryEntries?: ResolvedGlossaryEntry[];
+  subtitleTranslationStyle?: 'neutral' | 'conversational';
+  /** 词库来源标注；缺省时 match 日志保持旧文案。 */
+  glossarySourceLabel?: string;
+  /** 通读摘要正文；仅 AI 翻译注入 system。 */
+  episodeSummary?: string;
+  /** 无摘要时的稳定原因码，供日志说明。 */
+  summarySkipReason?: string;
+  signal?: AbortSignal;
+  /** 同一任务内按顺序尝试的备用实例；候选实例必须与 provider.type 相同。 */
+  fallbackProviders?: Provider[];
+  /** 已由 translationProvider 创建的任务级回退状态机。 */
+  fallbackRunner?: ProviderFallbackRunner;
+  /** 发生实例切换时的用户提示/日志回调。 */
+  onProviderFallback?: (event: {
+    from: Provider;
+    to: Provider;
+    reason: string;
+  }) => void;
+  /** 测试面板注入的思考元数据收集器（openspec: ai-thinking-mode-control D7） */
+  onResponseMeta?: (meta: TranslationResponseMeta) => void;
+}
+
+export type TranslatorFunction = (
+  text: string | string[],
+  config: any,
+  from: string,
+  to: string,
+  options?: TranslationRequestOptions,
+) => Promise<string | string[]>;
+
+/**
+ * 翻译响应的思考元数据（openspec: ai-thinking-mode-control D7）。
+ * 服务层拿到原始响应后通过 onResponseMeta 回传，测试面板据此展示思考状态徽标。
+ */
+export interface TranslationResponseMeta {
+  /** 独立思考字段（reasoning_content / ollama message.thinking）是否非空 */
+  reasoningContentPresent?: boolean;
+  /** usage.completion_tokens_details.reasoning_tokens */
+  reasoningTokens?: number;
+  completionTokens?: number;
+  /** 输入 token（usage.prompt_tokens / ollama prompt_eval_count），不回传则保持 undefined */
+  promptTokens?: number;
+  /** 思考内联进 content 的情况（<think> 标签），同样视为思考发生 */
+  contentThinkTagPresent?: boolean;
+}
+
+export interface TranslationRequestOptions {
+  signal?: AbortSignal;
+  /** Fallback scheduler hook for each SDK request, including format retries. */
+  beforeRequest?: () => Promise<void>;
+  /** 支持原生术语参数的非 AI 翻译服务可读取当前批次的词库。 */
+  glossaryEntries?: ResolvedGlossaryEntry[];
+  /**
+   * 按批次动态生成的响应 JSON Schema（design D1）。
+   * 提供时 service 层在 json_schema 模式下优先使用它（锁死批次键集合）；
+   * 未提供时沿用各 service 的静态 schema 行为（向后兼容）。
+   */
+  responseJsonSchema?: Record<string, unknown>;
+  /**
+   * 响应元数据回调（openspec: ai-thinking-mode-control D7）：
+   * 正式翻译链路不传（零开销），测试面板传入收集器判定思考是否实际发生。
+   */
+  onResponseMeta?: (meta: TranslationResponseMeta) => void;
+}
+
+export interface Provider {
+  type: string;
+  id: string;
+  name: string;
+  isAi: boolean;
+  prompt?: string;
+  systemPrompt?: string;
+  useBatchTranslation?: boolean;
+  batchSize?: number;
+  batchConcurrency?: number;
+  [key: string]: any;
+}

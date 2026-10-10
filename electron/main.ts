@@ -9,6 +9,7 @@ import http from 'node:http'
 import os from 'node:os'
 import packageMetadata from '../package.json'
 import type { AvailableUpdateInfo, OpenExternalResult, UpdateCheckResult, UpdateManifest } from '../src/types/update'
+import { initSmartSubBridge, smartsubQuitGuard } from '@smartsub/bridge'
 
 // electron-vite 构建后的目录结构
 //
@@ -1723,5 +1724,16 @@ app.whenReady().then(() => {
     }
   })
   
+  // SmartSub 桥:注册 smartsub:init 懒装配与资源定位通道(须在首窗创建前就位)
+  initSmartSubBridge()
+
   createWindow()
+})
+
+// SmartSub 退出守卫:有运行中任务先确认;放行前刷盘 + 关 python 运行时
+app.on('before-quit', (event) => {
+  event.preventDefault()
+  smartsubQuitGuard().then((allow) => {
+    if (allow) app.exit(0)
+  })
 })

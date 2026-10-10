@@ -1,0 +1,431 @@
+import { randomUUID } from 'crypto';
+import type {
+  Glossary,
+  GlossaryConflict,
+  GlossaryEntry,
+  GlossaryImportEntry,
+  GlossaryResolution,
+  ResolvedGlossaryEntry,
+} from '../types/glossary';
+import {
+  GLOSSARY_LIMITS,
+  glossarySourceKey,
+  mergeGlossaryImportEntry,
+  normalizeGlossaries,
+  reorderGlossaries,
+  resolveTaskGlossaryEntries,
+} from '../glossary/core';
+import { logMessage, store } from './storeManager';
+import { getTaskContext } from './taskContext';
+import { getWorkItemById } from './workItemStore';
+
+export class GlossaryManagerError extends Error {
+  constructor(public readonly code: string) {
+    super(code);
+    this.name = 'GlossaryManagerError';
+  }
+}
+
+function cleaned(value: unknown, maxLength: number): string {
+  return String(value ?? '')
+    .replace(/\r\n?/g, '\n')
+    .trim()
+    .slice(0, maxLength);
+}
+
+function writeGlossaries(glossaries: Glossary[]): Glossary[] {
+  const normalized = normalizeGlossaries(glossaries).map((glossary, order) => ({
+    ...glossary,
+    order,
+  }));
+  store.set('glossaries', normalized);
+  return normalized;
+}
+
+export function listGlossaries(): Glossary[] {
+  return normalizeGlossaries(store.get('glossaries'));
+}
+
+export function getGlossary(id: string): Glossary | null {
+  return listGlossaries().find((glossary) => glossary.id === id) || null;
+}
+
+function ensureUniqueGlossaryName(
+  glossaries: Glossary[],
+  name: string,
+  ignoreId?: string,
+): void {
+  const key = name.toLowerCase();
+  if (
+    glossaries.some(
+      (glossary) =>
+        glossary.id !== ignoreId && glossary.name.toLowerCase() === key,
+    )
+  ) {
+    throw new GlossaryManagerError('DUPLICATE_GLOSSARY_NAME');
+  }
+}
+
+export function createGlossary(input: {
+  name?: string;
+  description?: string;
+}): Glossary {
+  const glossaries = listGlossaries();
+  const name = cleaned(input?.name, GLOSSARY_LIMITS.name);
+  if (!name) throw new GlossaryManagerError('GLOSSARY_NAME_REQUIRED');
+  ensureUniqueGlossaryName(glossaries, name);
+  const now = Date.now();
+  const glossary: Glossary = {
+    id: randomUUID(),
+    name,
+    ...(cleaned(input?.description, GLOSSARY_LIMITS.description)
+      ? {
+          description: cleaned(input?.description, GLOSSARY_LIMITS.description),
+        }
+      : {}),
+    enabled: true,
+    order: glossaries.length,
+    entries: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  writeGlossaries([...glossaries, glossary]);
+  return glossary;
+}
+
+export function updateGlossary(
+  id: string,
+  patch: { name?: string; description?: string; enabled?: boolean },
+): Glossary {
+  const glossaries = listGlossaries();
+  const index = glossaries.findIndex((glossary) => glossary.id === id);
+  if (index < 0) throw new GlossaryManagerError('GLOSSARY_NOT_FOUND');
+  const current = glossaries[index];
+  const name =
+    patch.name === undefined
+      ? current.name
+      : cleaned(patch.name, GLOSSARY_LIMITS.name);
+  if (!name) throw new GlossaryManagerError('GLOSSARY_NAME_REQUIRED');
+  ensureUniqueGlossaryName(glossaries, name, id);
+  const description =
+    patch.description === undefined
+      ? current.description || ''
+      : cleaned(patch.description, GLOSSARY_LIMITS.description);
+  const updated: Glossary = {
+    ...current,
+    name,
+    ...(description ? { description } : { description: undefined }),
+    enabled:
+      patch.enabled === undefined ? current.enabled : patch.enabled === true,
+    updatedAt: Date.now(),
+  };
+  glossaries[index] = updated;
+  writeGlossaries(glossaries);
+  return updated;
+}
+
+export function deleteGlossary(id: string): boolean {
+  const glossaries = listGlossaries();
+  const next = glossaries.filter((glossary) => glossary.id !== id);
+  if (next.length === glossaries.length) return false;
+  writeGlossaries(next);
+  return true;
+}
+
+export function moveGlossary(id: string, direction: -1 | 1): Glossary[] {
+  const glossaries = listGlossaries();
+  const index = glossaries.findIndex((glossary) => glossary.id === id);
+  if (index < 0) throw new GlossaryManagerError('GLOSSARY_NOT_FOUND');
+  const target = index + direction;
+  if (target < 0 || target >= glossaries.length) return glossaries;
+  return writeGlossaries(reorderGlossaries(glossaries, id, direction));
+}
+
+function normalizeEntryInput(input: Partial<GlossaryEntry>): {
+  source: string;
+  target: string;
+  note: string;
+} {
+  const source = cleaned(input?.source, GLOSSARY_LIMITS.source);
+  const target = cleaned(input?.target, GLOSSARY_LIMITS.target);
+  const note = cleaned(input?.note, GLOSSARY_LIMITS.note);
+  if (!source) throw new GlossaryManagerError('ENTRY_SOURCE_REQUIRED');
+  if (!target) throw new GlossaryManagerError('ENTRY_TARGET_REQUIRED');
+  return { source, target, note };
+}
+
+export function saveGlossaryEntry(
+  glossaryId: string,
+  input: Partial<GlossaryEntry>,
+): GlossaryEntry {
+  const glossaries = listGlossaries();
+  const glossaryIndex = glossaries.findIndex(
+    (glossary) => glossary.id === glossaryId,
+  );
+  if (glossaryIndex < 0) {
+    throw new GlossaryManagerError('GLOSSARY_NOT_FOUND');
+  }
+  const glossary = glossaries[glossaryIndex];
+  const { source, target, note } = normalizeEntryInput(input);
+  const duplicate = glossary.entries.find(
+    (entry) =>
+      entry.id !== input.id &&
+      glossarySourceKey(entry.source) === glossarySourceKey(source),
+  );
+  if (duplicate) throw new GlossaryManagerError('DUPLICATE_ENTRY_SOURCE');
+
+  const now = Date.now();
+  const entryIndex = input.id
+    ? glossary.entries.findIndex((entry) => entry.id === input.id)
+    : -1;
+  const entry: GlossaryEntry = {
+    id: entryIndex >= 0 ? glossary.entries[entryIndex].id : randomUUID(),
+    source,
+    target,
+    ...(note ? { note } : {}),
+    createdAt: entryIndex >= 0 ? glossary.entries[entryIndex].createdAt : now,
+    updatedAt: now,
+  };
+  if (entryIndex >= 0) glossary.entries[entryIndex] = entry;
+  else glossary.entries.push(entry);
+  glossary.updatedAt = now;
+  glossaries[glossaryIndex] = glossary;
+  writeGlossaries(glossaries);
+  return entry;
+}
+
+export function deleteGlossaryEntry(
+  glossaryId: string,
+  entryId: string,
+): boolean {
+  const glossaries = listGlossaries();
+  const glossaryIndex = glossaries.findIndex(
+    (glossary) => glossary.id === glossaryId,
+  );
+  if (glossaryIndex < 0) return false;
+  const glossary = glossaries[glossaryIndex];
+  const nextEntries = glossary.entries.filter((entry) => entry.id !== entryId);
+  if (nextEntries.length === glossary.entries.length) return false;
+  glossaries[glossaryIndex] = {
+    ...glossary,
+    entries: nextEntries,
+    updatedAt: Date.now(),
+  };
+  writeGlossaries(glossaries);
+  return true;
+}
+
+export function importGlossaryEntries(
+  glossaryId: string,
+  imported: GlossaryImportEntry[],
+): {
+  glossary: Glossary;
+  added: number;
+  updated: number;
+  skipped: number;
+} {
+  const glossaries = listGlossaries();
+  const glossaryIndex = glossaries.findIndex(
+    (glossary) => glossary.id === glossaryId,
+  );
+  if (glossaryIndex < 0) {
+    throw new GlossaryManagerError('GLOSSARY_NOT_FOUND');
+  }
+  const glossary = glossaries[glossaryIndex];
+  const bySource = new Map(
+    glossary.entries.map((entry, index) => [
+      glossarySourceKey(entry.source),
+      index,
+    ]),
+  );
+  let added = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  imported.forEach((input) => {
+    const key = glossarySourceKey(input.source);
+    const index = bySource.get(key);
+    const current = index === undefined ? undefined : glossary.entries[index];
+    const merged = mergeGlossaryImportEntry(current, input);
+    if (merged.kind === 'invalid') {
+      skipped++;
+      return;
+    }
+    if (merged.kind === 'skip') {
+      skipped++;
+      return;
+    }
+
+    const now = Date.now();
+    if (index === undefined) {
+      const entry: GlossaryEntry = {
+        id: randomUUID(),
+        ...merged.value,
+        createdAt: now,
+        updatedAt: now,
+      };
+      bySource.set(key, glossary.entries.length);
+      glossary.entries.push(entry);
+      added++;
+      return;
+    }
+    glossary.entries[index] = {
+      ...current,
+      ...merged.value,
+      ...(merged.value.note ? {} : { note: undefined }),
+      updatedAt: now,
+    };
+    updated++;
+  });
+
+  if (!added && !updated) {
+    return { glossary, added, updated, skipped };
+  }
+  glossary.updatedAt = Date.now();
+  glossaries[glossaryIndex] = glossary;
+  writeGlossaries(glossaries);
+  return { glossary, added, updated, skipped };
+}
+
+/** 按任务选用读取运行期快照；`ids === undefined` 回落全部已启用。 */
+export function getTaskGlossaryResolution(
+  ids?: string[],
+  projectId = getTaskContext()?.projectId,
+): GlossaryResolution {
+  return resolveTaskGlossaryEntries(listGlossaries(), ids, projectId);
+}
+
+/** 读取运行期快照；日志由每次翻译/优化操作在自己的边界显式记录。 */
+export function getActiveGlossaryResolution(
+  projectId = getTaskContext()?.projectId,
+): GlossaryResolution {
+  return getTaskGlossaryResolution(undefined, projectId);
+}
+
+/** Save both a new collection and its first entry in one durable store write. */
+export function addContextGlossaryEntry(input: {
+  source: string;
+  target: string;
+  scope: 'project' | 'global';
+  projectId?: string;
+  expectedTarget?: string;
+}): { entry: GlossaryEntry; glossary: Glossary; conflict?: boolean } {
+  if (input.scope !== 'project' && input.scope !== 'global')
+    throw new GlossaryManagerError('INVALID_SCOPE');
+  if (
+    typeof input.source !== 'string' ||
+    input.source.trim().length > GLOSSARY_LIMITS.source ||
+    typeof input.target !== 'string' ||
+    input.target.trim().length > GLOSSARY_LIMITS.target
+  )
+    throw new GlossaryManagerError('ENTRY_TOO_LONG');
+  const { source, target } = normalizeEntryInput(input);
+  const project =
+    input.scope === 'project' &&
+    typeof input.projectId === 'string' &&
+    input.projectId
+      ? getWorkItemById(input.projectId)
+      : null;
+  if (input.scope === 'project' && !project)
+    throw new GlossaryManagerError('PROJECT_NOT_FOUND');
+  const projectId = project?.id;
+  const glossaries = listGlossaries();
+  const collections = glossaries.filter(
+    (item) => item.enabled && item.projectId === projectId,
+  );
+  let glossary =
+    collections.find((item) =>
+      item.entries.some(
+        (entry) =>
+          glossarySourceKey(entry.source) === glossarySourceKey(source),
+      ),
+    ) || collections[0];
+  const now = Date.now();
+  if (!glossary) {
+    const label =
+      store.get('settings')?.language === 'en' ? 'Proofread terms' : '校对术语';
+    const name = cleaned(
+      project ? `${project.name} · ${label}` : label,
+      GLOSSARY_LIMITS.name,
+    );
+    let uniqueName = name;
+    for (
+      let n = 2;
+      glossaries.some(
+        (item) => item.name.toLowerCase() === uniqueName.toLowerCase(),
+      );
+      n++
+    ) {
+      const suffix = ` (${n})`;
+      uniqueName = `${name.slice(0, GLOSSARY_LIMITS.name - suffix.length)}${suffix}`;
+    }
+    glossary = {
+      id: randomUUID(),
+      name: uniqueName,
+      ...(projectId ? { projectId } : {}),
+      enabled: true,
+      order: glossaries.length,
+      entries: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    glossaries.push(glossary);
+  }
+  const existing = glossary.entries.find(
+    (entry) => glossarySourceKey(entry.source) === glossarySourceKey(source),
+  );
+  if (existing?.target === target) return { entry: existing, glossary };
+  if (existing && input.expectedTarget !== existing.target)
+    return { entry: existing, glossary, conflict: true };
+  const entry: GlossaryEntry = {
+    ...(existing || {}),
+    id: existing?.id || randomUUID(),
+    source,
+    target,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
+  if (existing) glossary.entries[glossary.entries.indexOf(existing)] = entry;
+  else glossary.entries.push(entry);
+  glossary.updatedAt = now;
+  writeGlossaries(glossaries);
+  return { entry, glossary };
+}
+
+export function logGlossaryConflicts(
+  conflicts: GlossaryConflict[],
+  context?: string,
+): void {
+  conflicts.forEach((conflict) => {
+    logMessage(
+      `词库原文冲突${context ? `（${context}）` : ''}「${conflict.source}」：按词库顺序采用「${conflict.kept.glossaryName}」中的“${conflict.kept.target}”，忽略「${conflict.ignored.glossaryName}」中的“${conflict.ignored.target}”`,
+      'warning',
+    );
+  });
+}
+
+export function logGlossaryMatches(
+  matches: ResolvedGlossaryEntry[],
+  context: string,
+  omittedCount: number = 0,
+): void {
+  if (matches.length) {
+    const visible = matches.slice(0, 50);
+    const remainder = matches.length - visible.length;
+    logMessage(
+      `词库命中（${context}）：${visible
+        .map(
+          (entry) =>
+            `${entry.source} → ${entry.target} [${entry.glossaryName}]`,
+        )
+        .join('；')}${remainder > 0 ? `；另有 ${remainder} 条已注入` : ''}`,
+      'info',
+    );
+  }
+  if (omittedCount > 0) {
+    logMessage(
+      `词库命中超出提示词上限（${context}）：共命中 ${matches.length + omittedCount} 条，按优先级注入 ${matches.length} 条，省略 ${omittedCount} 条`,
+      'warning',
+    );
+  }
+}
