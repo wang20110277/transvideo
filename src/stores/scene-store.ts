@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { createSplitStorage } from '@/lib/project-storage';
 import { saveImageToLocal, isElectron } from '@/lib/image-storage';
+import { computeReorderedScenes } from '@/lib/scene-reorder';
 import { useProjectStore } from '@/stores/project-store';
 
 // ==================== Types ====================
@@ -90,6 +91,7 @@ interface SceneActions {
   updateScene: (id: string, updates: Partial<Scene>) => void;
   deleteScene: (id: string) => void;
   moveToFolder: (sceneId: string, folderId: string | null) => void;
+  reorderScene: (sceneId: string, beforeSceneId: string | null) => void;
   
   // Folder CRUD
   addFolder: (name: string, parentId?: string | null, projectId?: string) => string;
@@ -264,6 +266,13 @@ export const useSceneStore = create<SceneStore>()(
               ? { ...scene, folderId, updatedAt: Date.now() }
               : scene
           ),
+        }));
+      },
+
+      // 拖拽排序:显示顺序 = 数组顺序,重排数组即持久化(纯函数见 lib/scene-reorder)
+      reorderScene: (sceneId, beforeSceneId) => {
+        set((state) => ({
+          scenes: computeReorderedScenes(state.scenes, sceneId, beforeSceneId),
         }));
       },
 

@@ -10,6 +10,12 @@
 
 import { useState, useMemo, useEffect } from "react";
 import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  type DropResult,
+} from "@hello-pangea/dnd";
+import {
   useSceneStore,
   type Scene,
   type SceneFolder,
@@ -59,6 +65,7 @@ import {
   Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { resolveSceneReorder } from "@/lib/scene-reorder";
 import { toast } from "sonner";
 import { useResolvedImageUrl } from "@/hooks/use-resolved-image-url";
 import { ImagePreviewModal } from "@/components/panels/director/media-preview-modal";
@@ -81,6 +88,7 @@ export function SceneGallery({ onSceneSelect, selectedSceneId }: SceneGalleryPro
     setCurrentFolder,
     deleteScene,
     moveToFolder,
+    reorderScene,
     getFolderById,
     selectScene,
     contactSheetTasks,
@@ -292,6 +300,20 @@ export function SceneGallery({ onSceneSelect, selectedSceneId }: SceneGalleryPro
     }
   };
 
+  // 拖拽排序:落点 → 重排动作的映射规则见 lib/scene-reorder(纯函数,含单测)
+  const handleDragEnd = (result: DropResult) => {
+    const { source, destination, draggableId } = result;
+    if (!destination) return;
+    const dragged = currentScenes[source.index]?.scene;
+    if (!dragged || dragged.id !== draggableId) return;
+    const action = resolveSceneReorder(
+      currentScenes.map((row) => row.scene),
+      source.index,
+      destination.index,
+    );
+    if (action) reorderScene(action.sceneId, action.beforeSceneId);
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header with breadcrumb and toolbar */}
@@ -436,44 +458,72 @@ export function SceneGallery({ onSceneSelect, selectedSceneId }: SceneGalleryPro
             <div className="text-xs text-muted-foreground mb-2">
               场景 ({rootScenes.length})
             </div>
-            <div className={cn(
-              viewMode === "grid" 
-                ? "grid grid-cols-2 gap-2" 
-                : "space-y-1"
-            )}>
-              {currentScenes.map(({ scene, depth }) => {
-                const childCount = getDescendantCount(scene.id);
-                const isExpanded = expandedScenes.has(scene.id);
-                const hasChildren = childCount > 0;
-                
-                return (
-                  <SceneContextMenu
-                    key={scene.id}
-                    scene={scene}
-                    folders={visibleFolders}
-                    onDelete={() => handleDeleteScene(scene)}
-                    onMove={(folderId) => {
-                      moveToFolder(scene.id, folderId);
-                      toast.success("场景已移动");
-                    }}
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <Droppable
+                droppableId="scene-gallery"
+                direction={viewMode === "grid" ? "horizontal" : "vertical"}
+              >
+                {(provided) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={cn(
+                      viewMode === "grid"
+                        ? "flex flex-wrap gap-2"
+                        : "space-y-1"
+                    )}
                   >
-                    <SceneCard
-                      scene={scene}
-                      isSelected={selectedSceneId === scene.id}
-                      viewMode={viewMode}
-                      onClick={() => handleSceneClick(scene)}
-                      depth={depth}
-                      childCount={childCount}
-                      isExpanded={isExpanded}
-                      hasChildren={hasChildren}
-                      onToggleExpand={() => toggleExpand(scene.id)}
-                      onImagePreview={(url) => setPreviewImageUrl(url)}
-                      generatingTask={contactSheetTasks[scene.id]}
-                    />
-                  </SceneContextMenu>
-                );
-              })}
-            </div>
+                    {currentScenes.map(({ scene, depth }, index) => {
+                      const childCount = getDescendantCount(scene.id);
+                      const isExpanded = expandedScenes.has(scene.id);
+                      const hasChildren = childCount > 0;
+
+                      return (
+                        <SceneContextMenu
+                          key={scene.id}
+                          scene={scene}
+                          folders={visibleFolders}
+                          onDelete={() => handleDeleteScene(scene)}
+                          onMove={(folderId) => {
+                            moveToFolder(scene.id, folderId);
+                            toast.success("场景已移动");
+                          }}
+                        >
+                          <Draggable draggableId={scene.id} index={index}>
+                            {(dragProvided) => (
+                              <div
+                                ref={dragProvided.innerRef}
+                                {...dragProvided.draggableProps}
+                                {...dragProvided.dragHandleProps}
+                                className={cn(
+                                  "min-w-0",
+                                  viewMode === "grid" && "w-[calc(50%-0.25rem)]"
+                                )}
+                              >
+                                <SceneCard
+                                  scene={scene}
+                                  isSelected={selectedSceneId === scene.id}
+                                  viewMode={viewMode}
+                                  onClick={() => handleSceneClick(scene)}
+                                  depth={depth}
+                                  childCount={childCount}
+                                  isExpanded={isExpanded}
+                                  hasChildren={hasChildren}
+                                  onToggleExpand={() => toggleExpand(scene.id)}
+                                  onImagePreview={(url) => setPreviewImageUrl(url)}
+                                  generatingTask={contactSheetTasks[scene.id]}
+                                />
+                              </div>
+                            )}
+                          </Draggable>
+                        </SceneContextMenu>
+                      );
+                    })}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
           </div>
         ) : (
           subFolders.length === 0 && (

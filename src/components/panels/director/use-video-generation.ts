@@ -2,6 +2,7 @@
 // Licensed under AGPL-3.0-or-later. See LICENSE for details.
 // Commercial licensing available. See COMMERCIAL_LICENSE.md.
 import { getFeatureConfig } from "@/lib/ai/feature-router";
+import { toRootBaseUrl } from "@/lib/ai/root-base-url";
 import { uploadToImageHost, isImageHostConfigured } from "@/lib/image-host";
 import { saveVideoToLocal, readImageAsBase64 } from "@/lib/image-storage";
 import { normalizeUrl } from "./use-image-generation";
@@ -598,7 +599,7 @@ async function callUnifiedVideoApi(
   if (Object.keys(metadata).length > 0) body.metadata = metadata;
 
   // 绝对路径拼接：从域名根开始
-  const rootBase = baseUrl.replace(/\/v\d+$/, '');
+  const rootBase = toRootBaseUrl(baseUrl);
   const submitUrl = `${rootBase}${endpointPaths.submit}`;
   console.log(`[VideoGen] Unified format → POST ${endpointPaths.submit}`, { model, metadata, hasImage: !!firstFrame?.url });
 
@@ -754,6 +755,10 @@ async function callVolcVideoApi(
 
   const requestBody = { model, content };
 
+  // 绝对路径拼接：从域名根开始（baseUrl 可能带 /v1 后缀，需剥掉，否则出现
+  // /v1/volc/v1/... 重复路径）
+  const rootBase = toRootBaseUrl(baseUrl);
+
   console.log('[VideoGen] Volc format → POST /volc/v1/contents/generations/tasks', {
     model,
     resolution,
@@ -762,7 +767,7 @@ async function callVolcVideoApi(
     imageCount: imageWithRoles.filter(i => i.url).length,
   });
 
-  const submitResponse = await fetch(`${baseUrl}/volc/v1/contents/generations/tasks`, {
+  const submitResponse = await fetch(`${rootBase}/volc/v1/contents/generations/tasks`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -824,7 +829,7 @@ async function callVolcVideoApi(
     onProgress?.(Math.min(20 + Math.floor((attempt / maxAttempts) * 80), 99));
 
     const statusResponse = await fetch(
-      `${baseUrl}/volc/v1/contents/generations/tasks/${taskId}`,
+      `${rootBase}/volc/v1/contents/generations/tasks/${taskId}`,
       {
         method: 'GET',
         headers: {
@@ -912,8 +917,11 @@ async function callWanVideoApi(
 
   console.log('[VideoGen] Wan format → POST /alibailian/api/v1/services/aigc/video-generation/video-synthesis', { model });
 
+  // 绝对路径拼接：从域名根开始（剥 baseUrl 可能的 /v1 后缀）
+  const rootBase = toRootBaseUrl(baseUrl);
+
   const submitResponse = await fetch(
-    `${baseUrl}/alibailian/api/v1/services/aigc/video-generation/video-synthesis`,
+    `${rootBase}/alibailian/api/v1/services/aigc/video-generation/video-synthesis`,
     {
       method: 'POST',
       headers: {
@@ -945,7 +953,7 @@ async function callWanVideoApi(
     onProgress?.(Math.min(20 + Math.floor((attempt / maxAttempts) * 80), 99));
 
     const statusResponse = await fetch(
-      `${baseUrl}/alibailian/api/v1/tasks/${taskId}`,
+      `${rootBase}/alibailian/api/v1/tasks/${taskId}`,
       {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${apiKey}` },
@@ -1043,7 +1051,9 @@ async function callKlingVideoApi(
     requestBody.image_url = firstFrame.url;
   }
 
-  const submitUrl = `${baseUrl}/kling/v1/videos/${endpointPath}`;
+  // 绝对路径拼接：从域名根开始（剥 baseUrl 可能的 /v1 后缀）
+  const rootBase = toRootBaseUrl(baseUrl);
+  const submitUrl = `${rootBase}/kling/v1/videos/${endpointPath}`;
   console.log('[VideoGen] Kling format →', endpointPath, { model, submitUrl });
 
   const submitResponse = await fetch(submitUrl, {
@@ -1070,7 +1080,7 @@ async function callKlingVideoApi(
   if (!taskId) throw new Error('返回空的任务 ID');
 
   // 轮询 URL 镜像提交路径: GET /kling/v1/videos/{path}/{task_id}
-  const pollUrl = `${baseUrl}/kling/v1/videos/${endpointPath}/${taskId}`;
+  const pollUrl = `${rootBase}/kling/v1/videos/${endpointPath}/${taskId}`;
   const pollInterval = 5000;
   const maxAttempts = 180;
 
@@ -1146,7 +1156,9 @@ async function callOpenAIOfficialVideoApi(
   form.append('size', toSoraSize(aspectRatio, videoResolution));
   form.append('seconds', String(duration || 10));
 
-  const submitUrl = `${baseUrl}/v1/videos`;
+  // 绝对路径拼接：从域名根开始（剥 baseUrl 可能的 /v1 后缀，避免 /v1/v1/videos）
+  const rootBase = toRootBaseUrl(baseUrl);
+  const submitUrl = `${rootBase}/v1/videos`;
   console.log('[VideoGen] OpenAI Official format → POST /v1/videos', { model, size: toSoraSize(aspectRatio, videoResolution) });
 
   const submitResponse = await fetch(submitUrl, {
@@ -1170,7 +1182,7 @@ async function callOpenAIOfficialVideoApi(
   if (!taskId) throw new Error('Sora 返回空任务 ID');
 
   // 轮询: GET /v1/videos/{taskId}
-  const pollUrl = `${baseUrl}/v1/videos/${taskId}`;
+  const pollUrl = `${rootBase}/v1/videos/${taskId}`;
   const pollInterval = 5000;
   const maxAttempts = 180;
 
@@ -1192,7 +1204,7 @@ async function callOpenAIOfficialVideoApi(
     const status = String(statusData.status || '').toLowerCase();
 
     if (status === 'completed' || status === 'succeeded' || status === 'success') {
-      const videoUrl = extractVideoUrl(statusData) || normalizeUrl(`${baseUrl}/v1/videos/${taskId}/content`);
+      const videoUrl = extractVideoUrl(statusData) || normalizeUrl(`${rootBase}/v1/videos/${taskId}/content`);
       if (!videoUrl) throw new Error('Sora 任务完成但没有视频 URL');
       return videoUrl;
     }

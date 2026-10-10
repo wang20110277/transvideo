@@ -20,9 +20,10 @@
  *                   addon-linux-vulkan.node.gz     => addon.vulkan.node (gunzip)
  *
  * 用法：
- *   node scripts/smartsub/fetch-whisper-addon.mjs                 # host 平台/架构
+ *   node scripts/smartsub/fetch-whisper-addon.mjs                 # host 平台/架构；7 天内拉取过且产物齐全则跳过
  *   node scripts/smartsub/fetch-whisper-addon.mjs --arch=x64      # 指定架构（交叉打包/CI 矩阵）
  *   node scripts/smartsub/fetch-whisper-addon.mjs --source=gitcode --out=/tmp/addons
+ *   node scripts/smartsub/fetch-whisper-addon.mjs --force         # 强制重新下载（latest 为滚动源）
  *
  * 镜像源（默认 github，自动按 github -> gh-proxy -> gitcode 回退；--source / 环境变量
  * ADDON_DOWNLOAD_SOURCE 可改首选源）。下载 / 重签逻辑与 fetch-sherpa-native.mjs 共用
@@ -36,6 +37,8 @@ import {
   downloadWithFallback,
   gunzip,
   resignMacNodes,
+  readFetchMarker,
+  writeFetchMarker,
 } from './native-download.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -51,6 +54,9 @@ const GITCODE_BASE = 'https://gitcode.com';
 
 // 单文件至少应有的字节数：真实 addon 均为数 MB，过小说明拿到的是 404/HTML 占位。
 const MIN_PLAUSIBLE_BYTES = 100 * 1024;
+
+// 拉取缓存时效：latest 滚动源无版本可比，7 天内拉取过且产物齐全则跳过下载。
+const MARKER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function parseArgs(argv) {
   const args = {};
@@ -148,6 +154,18 @@ async function main() {
   const targets = resolveTargets(platform, arch);
   fs.mkdirSync(outDir, { recursive: true });
 
+  // latest 是滚动源,无版本可比:7 天内拉取过且产物齐全则跳过(--force 刷新)。
+  const marker = readFetchMarker(outDir);
+  const fetchedAt = marker ? Date.parse(marker) : NaN;
+  const withinTtl = Number.isFinite(fetchedAt) && Date.now() - fetchedAt < MARKER_TTL_MS;
+  const allPresent = targets.every((t) => fs.existsSync(path.join(outDir, t.out)));
+  if (!process.argv.includes('--force') && withinTtl && allPresent) {
+    console.log(
+      `whisper addon present at ${outDir} (fetched ${marker}), skip fetch (--force to refetch)`,
+    );
+    return;
+  }
+
   console.log(
     `Fetching whisper addon for ${platform}-${arch} (source=${source}) -> ${outDir}`,
   );
@@ -170,6 +188,7 @@ async function main() {
   }
 
   resignMacNodes(outDir);
+  writeFetchMarker(outDir, new Date().toISOString());
 
   console.log(`whisper addon ready at ${outDir} (${platform}-${arch})`);
 }

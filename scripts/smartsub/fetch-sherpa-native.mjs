@@ -9,7 +9,8 @@
  * extraResources 块把它映射进包内 extraResources/smartsub/），等价于上游 extraResources/。
  *
  * 用法：
- *   node scripts/smartsub/fetch-sherpa-native.mjs
+ *   node scripts/smartsub/fetch-sherpa-native.mjs               # 已有同版本产物时跳过下载
+ *   node scripts/smartsub/fetch-sherpa-native.mjs --force       # 强制重新下载
  *
  * 架构说明：默认取 host 平台/架构的原生库。electron-builder 为每个目标平台在其原生
  * runner 上打包（CI matrix / 本机），host 即目标。需要交叉打包时在对应平台 runner 上运行。
@@ -29,6 +30,8 @@ import {
   fetchText,
   sha256,
   resignMacNodes,
+  readFetchMarker,
+  writeFetchMarker,
 } from './native-download.mjs';
 
 // 与 electron/services/smartsub/helpers/sherpaOnnx/sherpaLibPaths.ts 的
@@ -68,6 +71,19 @@ async function main() {
     platformKey,
   );
   const tmp = path.join(os.tmpdir(), asset);
+  const nativePath = path.join(outDir, 'sherpa-onnx.node');
+
+  // 同版本产物已在位 → 跳过下载(版本升级或 --force 时才重新拉)。
+  if (
+    !process.argv.includes('--force') &&
+    readFetchMarker(outDir) === SHERPA_VERSION &&
+    fs.existsSync(nativePath)
+  ) {
+    console.log(
+      `sherpa native ${SHERPA_VERSION} already present at ${outDir}, skip fetch (--force to refetch)`,
+    );
+    return;
+  }
 
   console.log(`Fetching ${asset} ...`);
   await download(releaseUrl(asset), tmp);
@@ -94,10 +110,10 @@ async function main() {
 
   resignMacNodes(outDir);
 
-  const nativePath = path.join(outDir, 'sherpa-onnx.node');
   if (!fs.existsSync(nativePath)) {
     throw new Error(`sherpa-onnx.node missing in ${outDir} after extract`);
   }
+  writeFetchMarker(outDir, SHERPA_VERSION);
   console.log(`sherpa native ready at ${outDir} (${platformKey})`);
 }
 

@@ -103,6 +103,23 @@ export function sha256(file) {
   return createHash('sha256').update(fs.readFileSync(file)).digest('hex').toLowerCase();
 }
 
+/**
+ * 拉取缓存标记:记录"产物目录里这份原生库是何时/按什么版本拉下来的"。
+ * fetch 脚本据此跳过重复下载(标记有效且产物齐全时),--force 强制刷新。
+ * 值由调用方定:固定版本号(sherpa 的 1.13.2)或 ISO 时间戳(whisper 的滚动 latest)。
+ */
+export function writeFetchMarker(dir, value) {
+  fs.writeFileSync(path.join(dir, '.fetch-marker'), value);
+}
+
+export function readFetchMarker(dir) {
+  try {
+    return fs.readFileSync(path.join(dir, '.fetch-marker'), 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** gunzip srcPath -> destPath。 */
 export function gunzip(srcPath, destPath) {
   return new Promise((resolve, reject) => {
