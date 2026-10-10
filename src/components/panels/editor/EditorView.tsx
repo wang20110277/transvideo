@@ -4,8 +4,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useMediaPanelStore } from "@/stores/media-panel-store";
+import { useSubtitleStudioStore } from "@/stores/subtitle-studio-store";
 import { editorRouter } from "@editor/shims/navigation";
-import { registerHostAssetsSection } from "@editor/host-bridge";
+import { registerHostAssetsSection, registerSubtitleHandoff } from "@editor/host-bridge";
 import type { EditorCore } from "@editor/core";
 import { TransvideoMediaBridge } from "./TransvideoMediaBridge";
 
@@ -82,6 +83,27 @@ export function EditorView() {
     registerHostAssetsSection(<TransvideoMediaBridge />);
     return () => registerHostAssetsSection(null);
   }, []);
+
+  // 注册「导出后添加字幕」交接(编辑器导出弹层 → 字幕板块):
+  // 导出成片经主进程落盘到 exports/(拿确定绝对路径)→ 预填字幕向导 → 跳转字幕 tab。
+  // 跳转即卸载本组件:项目编辑已在卸载钩子里 best-effort 落盘,此处注销交接。
+  useEffect(() => {
+    registerSubtitleHandoff(async (buffer, filename) => {
+      const ipc = window.ipcRenderer;
+      if (!ipc) return false;
+      const result = (await ipc.invoke("save-export-buffer", {
+        buffer,
+        filename,
+      })) as { success: boolean; filePath?: string; fileName?: string };
+      if (!result?.success || !result.filePath || !result.fileName) return false;
+      useSubtitleStudioStore.getState().openWizard([
+        { uuid: crypto.randomUUID(), name: result.fileName, path: result.filePath },
+      ]);
+      setActiveTab("subtitle");
+      return true;
+    });
+    return () => registerSubtitleHandoff(null);
+  }, [setActiveTab]);
 
   // 装配导航 shim
   useEffect(() => {

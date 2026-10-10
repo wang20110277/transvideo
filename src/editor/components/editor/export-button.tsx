@@ -19,7 +19,11 @@ import {
 	getExportFileExtension,
 	downloadBuffer,
 } from "@editor/lib/export";
-import { Check, Copy, Download, RotateCcw } from "lucide-react";
+import {
+	hasSubtitleHandoff,
+	invokeSubtitleHandoff,
+} from "@editor/host-bridge";
+import { Captions, Check, Copy, Download, RotateCcw } from "lucide-react";
 import {
 	EXPORT_FORMAT_VALUES,
 	EXPORT_QUALITY_VALUES,
@@ -110,10 +114,14 @@ function ExportPopover({
 	const [shouldIncludeAudio, setShouldIncludeAudio] = useState<boolean>(
 		DEFAULT_EXPORT_OPTIONS.includeAudio ?? true,
 	);
+	const [subtitleBusy, setSubtitleBusy] = useState(false);
+	const [subtitleError, setSubtitleError] = useState(false);
+	const exportFileName = `${activeProject.metadata.name}${getExportFileExtension({ format })}`;
 
 	const handleExport = async () => {
 		if (!activeProject) return;
 
+		setSubtitleError(false);
 		const result = await editor.project.export({
 			options: {
 				format,
@@ -128,16 +136,37 @@ function ExportPopover({
 			return;
 		}
 
-		if (result.success && result.buffer) {
-			downloadBuffer({
-				buffer: result.buffer,
-				filename: `${activeProject.metadata.name}${getExportFileExtension({ format })}`,
-				mimeType: getExportMimeType({ format }),
-			});
+		// 成功:保留 exportState,展示成功态由用户选择「保存到本地」或「添加字幕」;
+		// 关闭弹层时统一 cancelExport + clearExportState(见 handlePopoverOpenChange)
+	};
 
-			editor.project.clearExportState();
-			onOpenChange(false);
+	const handleDownloadLocal = () => {
+		if (!exportResult?.buffer) return;
+		downloadBuffer({
+			buffer: exportResult.buffer,
+			filename: exportFileName,
+			mimeType: getExportMimeType({ format }),
+		});
+
+		editor.project.clearExportState();
+		onOpenChange(false);
+	};
+
+	const handleAddSubtitle = async () => {
+		if (!exportResult?.buffer || subtitleBusy) return;
+		setSubtitleBusy(true);
+		setSubtitleError(false);
+		const ok = await invokeSubtitleHandoff(
+			exportResult.buffer,
+			exportFileName,
+		);
+		setSubtitleBusy(false);
+		if (!ok) {
+			setSubtitleError(true); // 落盘或跳转失败:留在弹层,可重试
+			return;
 		}
+		editor.project.clearExportState();
+		onOpenChange(false);
 	};
 
 	const handleCancel = () => {
@@ -150,6 +179,15 @@ function ExportPopover({
 				<ExportError
 					error={exportResult.error || "发生未知错误"}
 					onRetry={handleExport}
+				/>
+			) : exportResult?.success ? (
+				<ExportSuccess
+					fileName={exportFileName}
+					onDownload={handleDownloadLocal}
+					onSubtitle={handleAddSubtitle}
+					subtitleAvailable={hasSubtitleHandoff()}
+					subtitleBusy={subtitleBusy}
+					subtitleError={subtitleError}
 				/>
 			) : (
 				<>
@@ -286,6 +324,54 @@ function ExportPopover({
 				</>
 			)}
 		</PopoverContent>
+	);
+}
+
+function ExportSuccess({
+	fileName,
+	onDownload,
+	onSubtitle,
+	subtitleAvailable,
+	subtitleBusy,
+	subtitleError,
+}: {
+	fileName: string;
+	onDownload: () => void;
+	onSubtitle: () => void;
+	subtitleAvailable: boolean;
+	subtitleBusy: boolean;
+	subtitleError: boolean;
+}) {
+	return (
+		<div className="flex flex-col gap-3 p-3">
+			<div className="flex flex-col gap-1 border-b pb-3">
+				<p className="text-sm font-medium">导出完成</p>
+				<p
+					className="text-muted-foreground truncate text-xs"
+					title={fileName}
+				>
+					{fileName}
+				</p>
+			</div>
+			<Button onClick={onDownload} className="w-full gap-2">
+				<Download className="size-4" />
+				保存到本地
+			</Button>
+			{subtitleAvailable && (
+				<Button
+					variant="outline"
+					className="w-full gap-2"
+					onClick={onSubtitle}
+					disabled={subtitleBusy}
+				>
+					<Captions className="size-4" />
+					{subtitleBusy ? "正在转入字幕板块…" : "添加字幕"}
+				</Button>
+			)}
+			{subtitleError && (
+				<p className="text-destructive text-xs">添加字幕失败,请重试</p>
+			)}
+		</div>
 	);
 }
 

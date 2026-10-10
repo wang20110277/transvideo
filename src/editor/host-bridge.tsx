@@ -21,3 +21,31 @@ export function HostAssetsSection() {
 	}, []);
 	return <>{hostAssetsSection}</>;
 }
+
+/** 宿主注册的「导出后添加字幕」处理器:落盘导出成片并跳转字幕板块;返回是否成功 */
+export type SubtitleHandoffHandler = (buffer: ArrayBuffer, filename: string) => Promise<boolean>;
+
+let subtitleHandoff: SubtitleHandoffHandler | null = null;
+
+/** 宿主注册字幕交接处理器(编辑器树不直接依赖宿主 store;null = 注销) */
+export function registerSubtitleHandoff(handler: SubtitleHandoffHandler | null) {
+	subtitleHandoff = handler;
+}
+
+/** 是否已有宿主处理器(导出弹层据此显示「添加字幕」入口) */
+export function hasSubtitleHandoff(): boolean {
+	return subtitleHandoff !== null;
+}
+
+/** 触发字幕交接:未注册或 handler 抛错返回 false */
+export async function invokeSubtitleHandoff(
+	buffer: ArrayBuffer,
+	filename: string,
+): Promise<boolean> {
+	if (!subtitleHandoff) return false;
+	try {
+		return await subtitleHandoff(buffer, filename);
+	} catch {
+		return false;
+	}
+}

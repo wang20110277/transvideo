@@ -41,8 +41,8 @@ export const mainNavItems: NavItem[] = [
   { id: "assets", label: "资产", icon: FolderOpenIcon },
   { id: "media", label: "素材", icon: VideoIcon },
   { id: "editor", label: "剪辑", icon: ScissorsIcon },
-  { id: "export", label: "导出", icon: FilmIcon, phase: "04" },
   { id: "subtitle", label: "字幕", icon: CaptionsIcon, phase: "04" },
+  { id: "export", label: "导出", icon: FilmIcon, phase: "04" },
   { id: "freedom", label: "自由", icon: PaletteIcon, phase: "02" },
 ];
 

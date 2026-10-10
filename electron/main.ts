@@ -321,6 +321,13 @@ function getMediaRoot() {
   return base
 }
 
+// 编辑器导出成片落盘目录(剪辑→字幕衔接:落盘后把绝对路径交给字幕任务)
+function getExportsRoot() {
+  const base = path.join(getStorageBasePath(), 'exports')
+  ensureDir(base)
+  return base
+}
+
 function getCacheDirs() {
   const userData = app.getPath('userData')
   return [
@@ -1599,6 +1606,35 @@ ipcMain.handle('save-file-dialog', async (_event, { localPath, defaultPath, filt
     return { success: true, filePath: result.filePath }
   } catch (error) {
     console.error('Failed to save file:', error)
+    return { success: false, error: String(error) }
+  }
+})
+
+// 编辑器导出成片落盘(剪辑→字幕衔接):写入 exports/,返回绝对路径供字幕任务引用
+ipcMain.handle('save-export-buffer', async (_event, { buffer, filename }: { buffer: ArrayBuffer, filename: string }) => {
+  try {
+    if (!buffer || buffer.byteLength === 0) {
+      return { success: false, error: 'Export buffer is empty' }
+    }
+    // 项目名可能含路径分隔符等文件系统非法字符,清洗之
+    const safeName = (filename || 'export').replace(/[\\/:*?"<>|]/g, '_')
+    let filePath = path.join(getExportsRoot(), safeName)
+    if (fs.existsSync(filePath)) {
+      // 同名碰撞:加时间戳后缀,不覆盖已有导出
+      const ext = path.extname(safeName)
+      const stem = ext ? safeName.slice(0, -ext.length) : safeName
+      filePath = path.join(getExportsRoot(), `${stem}-${Date.now()}${ext}`)
+    }
+    fs.writeFileSync(filePath, Buffer.from(buffer))
+    // 校验落盘非空(与 save-image 一致),空文件清理并报错
+    const stat = fs.statSync(filePath)
+    if (stat.size === 0) {
+      fs.unlinkSync(filePath)
+      return { success: false, error: 'Saved file is 0 bytes' }
+    }
+    return { success: true, filePath, fileName: path.basename(filePath) }
+  } catch (error) {
+    console.error('Failed to save export buffer:', error)
     return { success: false, error: String(error) }
   }
 })
