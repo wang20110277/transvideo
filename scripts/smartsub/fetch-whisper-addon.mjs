@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * 构建期拉取 whisper.cpp 原生 addon 到 smartsub-resources/addons/。
+ * 构建期拉取 whisper.cpp 原生 addon 到 resources/addons/。
  *
  * addon.node 由 buxuku/whisper.cpp 的 builder 分支（.github/workflows/builder.yml）按
  * 多平台编译并发布到 `latest` Release（GitCode 镜像 buxuku1/whisper.node）。这里按 host
- * 平台/架构取对应产物，落到 smartsub-resources/addons/（transvideo 的资源根目录，
+ * 平台/架构取对应产物，落到 resources/addons/（transvideo 的资源根目录，
  * 等价于上游 extraResources/addons/——electron-builder 的 extraResources 块把
- * smartsub-resources/ 整目录映射进包内 extraResources/smartsub/，运行时经
+ * resources/ 整目录映射进包内 extraResources/smartsub/，运行时经
  * getExtraResourcesPath()/addons/ 读取）。开发者一条命令即可拿到当前开发环境依赖的
  * addon，不必本地从源码编译。
  *
@@ -143,7 +143,7 @@ async function main() {
   const source = args.source || process.env.ADDON_DOWNLOAD_SOURCE || 'github';
   const outDir = args.out
     ? path.resolve(args.out)
-    : path.join(root, 'smartsub-resources', 'addons');
+    : path.join(root, 'resources', 'addons');
 
   const targets = resolveTargets(platform, arch);
   fs.mkdirSync(outDir, { recursive: true });

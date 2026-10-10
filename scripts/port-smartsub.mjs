@@ -160,7 +160,7 @@ for (const dir of ['helpers', 'service', 'translate', 'glossary', 'automation'])
 console.log(`layout codemod: ${layoutFixed} files rewritten`);
 
 // 脚本修复#7(brief Step 4 的脚本化): helpers/utils.ts getExtraResourcesPath 根路径适配。
-// 只改两个分支的根路径(打包 → extraResources/smartsub;开发 → smartsub-resources),
+// 只改两个分支的根路径(打包 → extraResources/smartsub;开发 → resources),
 // 与 brief Step 4 给定语义一致;写成脚本步骤保证上游同步重跑不丢失。
 const utilsPath = path.join(DST_ROOT, 'helpers/utils.ts');
 {
@@ -174,10 +174,10 @@ const utilsPath = path.join(DST_ROOT, 'helpers/utils.ts');
 };`;
   const NEW = `export const getExtraResourcesPath = () => {
   // 打包: resources/extraResources/smartsub(见 Task 7 的 builder 配置)
-  // 开发: 仓库根 smartsub-resources(Task 7 建立;资源未放时不致命)
+  // 开发: 仓库根 resources(Task 7 建立;资源未放时不致命)
   return app.isPackaged
     ? path.join(process.resourcesPath, 'extraResources', 'smartsub')
-    : path.join(app.getAppPath(), 'smartsub-resources');
+    : path.join(app.getAppPath(), 'resources');
 };`;
   if (text.includes(OLD)) {
     writeFileSync(utilsPath, text.replace(OLD, NEW));

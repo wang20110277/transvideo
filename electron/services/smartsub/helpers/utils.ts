@@ -162,10 +162,10 @@ export const isAppleSilicon = () => {
 
 export const getExtraResourcesPath = () => {
   // 打包: resources/extraResources/smartsub(见 Task 7 的 builder 配置)
-  // 开发: 仓库根 smartsub-resources(Task 7 建立;资源未放时不致命)
+  // 开发: 仓库根 resources(Task 7 建立;资源未放时不致命)
   return app.isPackaged
     ? path.join(process.resourcesPath, 'extraResources', 'smartsub')
-    : path.join(app.getAppPath(), 'smartsub-resources');
+    : path.join(app.getAppPath(), 'resources');
 };
 
 export function runCommand(command, args, onProcess = undefined) {

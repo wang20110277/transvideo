@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * 构建期拉取 sherpa-onnx 原生库到 smartsub-resources/sherpa/native/<platformKey>/。
+ * 构建期拉取 sherpa-onnx 原生库到 resources/sherpa/native/<platformKey>/。
  *
  * 本地 sherpa ASR 引擎共用 sherpa-onnx 原生运行库。过去它在运行时下载
  * 到 userData（下载/重签/自检失败面大）；现改为**随安装包内置**（像 whisper.cpp 的
  * addon.node 一样走资源目录，asar 内 .node 不可 dlopen 的限制只针对 asar，
- * 资源目录不受限）。transvideo 下资源根目录是 smartsub-resources/（electron-builder
+ * 资源目录不受限）。transvideo 下资源根目录是 resources/（electron-builder
  * extraResources 块把它映射进包内 extraResources/smartsub/），等价于上游 extraResources/。
  *
  * 用法：
@@ -62,7 +62,7 @@ async function main() {
   const asset = assetName(platformKey);
   const outDir = path.join(
     root,
-    'smartsub-resources',
+    'resources',
     'sherpa',
     'native',
     platformKey,

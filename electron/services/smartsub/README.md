@@ -8,7 +8,7 @@
   docs/superpowers/plans/2026-10-09-smartsub-migration-phase01.md
 - 已知偏差:
   1. helpers/smartsubPaths.ts + userData codemod:app.getPath('userData') → smartsubUserData()(34 处/26 文件,scripts/port-smartsub.mjs 自动完成;brief 预估 47,差额来自未搬运的 updater.ts 等)
-  2. helpers/utils.ts getExtraResourcesPath:根改为 extraResources/smartsub(打包)/ smartsub-resources(开发)
+  2. helpers/utils.ts getExtraResourcesPath:根改为 extraResources/smartsub(打包)/ resources(开发)
   3. 布局路径 codemod(161 文件):源仓库 types/ 与 renderer/lib/ 位于仓库根,main/ 子目录镜像为
      smartsub/ 直接子目录后,N≥2 级 '../' 攀升的 types/renderer 引用一律减一级
      (单级 '../types' 为 translate/types 等本地目录,保持不动)

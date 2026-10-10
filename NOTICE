@@ -9,7 +9,7 @@ Full MIT license text: see LICENSE-OpenCut in this repository.
 This product includes source code from SmartSub (https://github.com/buxuku/SmartSub),
 Copyright (c) 2024 buxuku, licensed under the MIT License.
 The ported copy lives in electron/services/smartsub/ (main-process pipeline:
-ASR engines, translation providers, TTS, compose) and smartsub-resources/
+ASR engines, translation providers, TTS, compose) and resources/
 (runtime assets), extracted from SmartSub v3.9.0 (commit a55e214).
 MIT License text: see LICENSE-SmartSub in this repository.
 The Subtitle panel UI (src/components/panels/subtitle/) is an original

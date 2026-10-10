@@ -23,7 +23,7 @@ extraResources:
       - "**/*"
   # smartsub 运行时资源:落地 Resources/extraResources/smartsub,
   # 与 getExtraResourcesPath()(process.resourcesPath/extraResources/smartsub)对齐
-  - from: smartsub-resources
+  - from: resources
     to: extraResources/smartsub
     filter:
       - "**/*"
